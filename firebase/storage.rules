@@ -1,0 +1,44 @@
+rules_version = '2';
+
+// Fotos privadas de Mi Voz. Máximo 5 MB, solo imágenes.
+// - Pictogramas propios y foto de perfil de un niño: solo los adultos
+//   vinculados al niño (según Firestore) pueden verlas o subirlas.
+// - Foto de perfil de un adulto: solo el propio adulto.
+// La app descarga las fotos de perfil con el SDK (se aplican estas reglas);
+// no usa enlaces públicos de descarga para ellas.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isImage() {
+      return request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    function isChildMember(childId) {
+      return request.auth != null
+        && request.auth.uid in firestore.get(
+          /databases/(default)/documents/children/$(childId)).data.memberUids;
+    }
+
+    match /children/{childId}/pictograms/{fileName} {
+      allow read, delete: if isChildMember(childId);
+      allow create, update: if isChildMember(childId) && isImage();
+    }
+
+    match /children/{childId}/avatar/{fileName} {
+      allow read, delete: if isChildMember(childId);
+      allow create, update: if isChildMember(childId) && isImage();
+    }
+
+    match /users/{userId}/avatar/{fileName} {
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null
+        && request.auth.uid == userId
+        && isImage();
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
