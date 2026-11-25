@@ -13,6 +13,8 @@
  *   cierra sus clases y elimina sus vínculos y datos (ver account.js).
  * - cleanupOnChildDeleted: al eliminar un perfil, borra sus subcolecciones,
  *   sus invitaciones y sus fotos en Storage.
+ * - notifyChildOnStatusChange: avisa al teléfono del niño cuando su adulto
+ *   vio su mensaje, va en camino o lo resolvió (ver child_status.js).
  * - importLocalHistory: transfiere el historial de un dispositivo al perfil
  *   en la nube (solo el administrador; ver migration.js).
  * - createInvitation, previewInvitation, redeemInvitation, revokeInvitation,
@@ -36,6 +38,7 @@ Object.assign(exports, require('./invitations'));
 // Limpieza al eliminar una cuenta.
 Object.assign(exports, require('./account'));
 Object.assign(exports, require('./migration'));
+Object.assign(exports, require('./child_status'));
 
 const { DATABASE } = require('./database');
 

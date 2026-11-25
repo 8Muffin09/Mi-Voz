@@ -35,6 +35,32 @@ necesita (Cloud Functions, Cloud Build, Artifact Registry, Eventarc). Si
 pregunta por la política de limpieza de imágenes de contenedores, acepta el
 valor sugerido (borra imágenes viejas y evita costos de almacenamiento).
 
+## Notificaciones: qué recibe cada quien
+
+| Quién | Cuándo | App abierta | App cerrada o en segundo plano |
+|---|---|---|---|
+| Adulto (tutor o docente) | El niño pulsa COMUNICAR o AYUDA YA | Aviso dentro de la app y la solicitud aparece al momento | Notificación del sistema (`notifyOnRequestCreated`). Las urgentes, en el canal "Ayuda urgente" |
+| Niño (teléfono en modo niño) | Su adulto la vio, va en camino o la resolvió | Aviso grande en cualquier pantalla, leído en voz alta | Notificación del sistema (`notifyChildOnStatusChange`, canal "Respuestas para el niño"); al tocarla abre "Mi mensaje" |
+
+Condiciones para que lleguen con la app cerrada:
+
+- Cloud Functions desplegadas (plan Blaze).
+- Cada teléfono abrió la app al menos una vez con la sesión iniciada y
+  **permitió las notificaciones** (Android 13+ lo pregunta). El teléfono del
+  niño registra su dispositivo al entrar en modo niño.
+- A qué adulto se avisa: a quien marcó "Estoy acompañando"; si nadie, la
+  regla del perfil (por defecto, solo al administrador; puede cambiarse a
+  "todos los adultos autorizados").
+- Algunos teléfonos (Xiaomi, Huawei, Oppo…) bloquean avisos de apps con
+  ahorro de batería: en *Ajustes → Batería*, deja Mi Voz "sin
+  restricciones".
+- Si el niño comunica **sin internet** y cierra la app, la solicitud queda
+  guardada y se envía (y se avisa) cuando vuelva a abrir la app con
+  conexión.
+
+Estado: el código está probado en el emulador (la función se ejecuta), pero
+el envío real por FCM **no se ha probado en teléfonos**.
+
 ## Qué servicio necesita qué plan
 
 | Servicio | Uso en Mi Voz | Plan |

@@ -11,8 +11,8 @@ Tres niveles, que **no** se sustituyen entre sí:
 | B. Emuladores de Firebase | Reglas de Firestore, Cloud Functions y Auth reales, con varios "dispositivos" (instancias independientes del SDK cliente) | ver abajo |
 | C. Dos teléfonos con un proyecto Firebase real | Todo el recorrido de extremo a extremo | `docs/DEMO_DOS_TELEFONOS.md` |
 
-Resultados de esta entrega: **A: 206 pruebas aprobadas** (3 omitidas a
-propósito: generan capturas solo a pedido). **B: 14 de 14 aprobadas**
+Resultados de esta entrega: **A: 211 pruebas aprobadas** (3 omitidas a
+propósito: generan capturas solo a pedido). **B: 18 de 18 aprobadas** (14 recorridos + 4 del aviso al niño)
 (salida en `docs/evidencias/emuladores.txt`). **C: pendiente** (no hay
 proyecto Firebase ni dos teléfonos disponibles en este entorno).
 

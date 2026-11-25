@@ -18,7 +18,16 @@ final notificationBootstrapProvider = Provider<void>((ref) {
   push.registerDevice(uid: user.uid, childModeChildId: childModeId);
 
   void open(RemoteMessage m) {
-    if (childModeId != null) return;
+    if (childModeId != null) {
+      // Teléfono en modo niño: "Tu adulto va en camino" abre su mensaje.
+      final requestId = m.data['requestId'];
+      if (m.data['type'] == 'request_status' &&
+          m.data['childId'] == childModeId &&
+          requestId is String) {
+        ref.read(routerProvider).push(Routes.childCommunicate(requestId));
+      }
+      return;
+    }
     // Solicitud para unirse a una familia o clase: se aprueba en el panel.
     if (m.data['type'] == 'join_request') {
       ref.read(routerProvider).go(Routes.adult);
@@ -32,7 +41,10 @@ final notificationBootstrapProvider = Provider<void>((ref) {
   }
 
   final foreground = push.foregroundMessages.listen((m) {
+    // En modo niño, con la app abierta el aviso lo muestra
+    // ChildStatusNoticeHost a partir de los datos en tiempo real.
     if (childModeId != null) return;
+    if (m.data['type'] == 'request_status') return;
     final isRequest = m.data['type'] != 'join_request';
     final childId = isRequest ? m.data['childId'] : null;
     final requestId = isRequest ? m.data['requestId'] : null;

@@ -42,10 +42,21 @@ class MainActivity : FlutterActivity() {
                 vibrationPattern = longArrayOf(0, 600, 250, 600, 250, 600)
             },
         )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_CHILD,
+                "Respuestas para el niño",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "Cuando su adulto vio el mensaje o va en camino"
+                enableVibration(true)
+            },
+        )
     }
 
     companion object {
         const val CHANNEL_REQUESTS = "mi_voz_requests"
         const val CHANNEL_URGENT = "mi_voz_urgent"
+        const val CHANNEL_CHILD = "mi_voz_child"
     }
 }

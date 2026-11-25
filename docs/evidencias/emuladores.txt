@@ -1,21 +1,25 @@
-# Pruebas contra emuladores de Firebase (Auth, Firestore, Functions)
-# Fecha: 2026-11-24T00:50Z · firebase-tools 14.27.0 · Node v22.23.5
+# Pruebas contra emuladores de Firebase (Auth, Firestore 'mivoz', Functions)
+# Fecha: 2026-11-25T07:54Z · firebase-tools 14.27.0 · Node v22.23.5
 # Proyecto: demo-mivoz (emulado, sin conexión a un proyecto real)
-ok 1 - 1. Registro de adulto: cuenta y perfil asociado al uid, sin contraseña
-ok 2 - 1b. Reintentar el registro no duplica la cuenta ni el perfil
-ok 3 - 2. Verificación de correo: se envía, "Ya confirmé" no basta y el servidor la exige
-ok 4 - 3 y 12. Otro dispositivo (o la app reabierta) recupera perfil y datos autorizados
-ok 5 - 4. Recuperación de contraseña por correo
-ok 6 - 5 y 6. Invitación creada en un teléfono y usada en otro (código escrito o leído del QR)
-ok 7 - 7. Código incorrecto, vencido, revocado o sin usos
-ok 8 - 7b. Intentos masivos: 5 códigos incorrectos bloquean la cuenta
-ok 9 - 7c. Dos canjes simultáneos del último uso: solo uno entra
-ok 10 - 8. Con aprobación pendiente no hay acceso anticipado; doble toque no duplica
-ok 11 - 9, 10, 11 y 16. Solicitud del alumno: llega, se atiende, se valora y no se duplica
-ok 12 - 13. Cambio de cuenta en el mismo teléfono: sin acceso a los datos anteriores
-ok 13 - 14. Accesos y cambios no autorizados se rechazan
-ok 14 - 15. Revocar una vinculación retira el acceso
-# tests 14
-# pass 14
+ok 1 - en atención: "¡Ana va en camino!" con lo que comunicó
+ok 2 - vista y resuelta también avisan
+ok 3 - sin nombre del adulto usa "Tu adulto"
+ok 4 - no avisa si el estado no avanza, si solo cambió la valoración o si es importada
+ok 5 - 1. Registro de adulto: cuenta y perfil asociado al uid, sin contraseña
+ok 6 - 1b. Reintentar el registro no duplica la cuenta ni el perfil
+ok 7 - 2. Verificación de correo: se envía, "Ya confirmé" no basta y el servidor la exige
+ok 8 - 3 y 12. Otro dispositivo (o la app reabierta) recupera perfil y datos autorizados
+ok 9 - 4. Recuperación de contraseña por correo
+ok 10 - 5 y 6. Invitación creada en un teléfono y usada en otro (código escrito o leído del QR)
+ok 11 - 7. Código incorrecto, vencido, revocado o sin usos
+ok 12 - 7b. Intentos masivos: 5 códigos incorrectos bloquean la cuenta
+ok 13 - 7c. Dos canjes simultáneos del último uso: solo uno entra
+ok 14 - 8. Con aprobación pendiente no hay acceso anticipado; doble toque no duplica
+ok 15 - 9, 10, 11 y 16. Solicitud del alumno: llega, se atiende, se valora y no se duplica
+ok 16 - 13. Cambio de cuenta en el mismo teléfono: sin acceso a los datos anteriores
+ok 17 - 14. Accesos y cambios no autorizados se rechazan
+ok 18 - 15. Revocar una vinculación retira el acceso
+# tests 18
+# pass 18
 # fail 0
-# duration_ms 33026.1457
+# duration_ms 16193.9911

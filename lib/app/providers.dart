@@ -145,10 +145,7 @@ final demoDatabaseProvider = Provider<DemoDatabase>(
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   if (ref.watch(isFirebaseModeProvider)) {
-    return FirebaseAuthRepository(
-      FirebaseAuth.instance,
-      _mivozFirestore,
-    );
+    return FirebaseAuthRepository(FirebaseAuth.instance, _mivozFirestore);
   }
   return DemoAuthRepository(ref.watch(demoDatabaseProvider));
 });
@@ -217,10 +214,7 @@ final requestsRepositoryProvider = Provider<RequestsRepository>((ref) {
 
 final contentRepositoryProvider = Provider<ContentRepository>((ref) {
   if (ref.watch(isFirebaseModeProvider)) {
-    return FirebaseContentRepository(
-      _mivozFirestore,
-      FirebaseStorage.instance,
-    );
+    return FirebaseContentRepository(_mivozFirestore, FirebaseStorage.instance);
   }
   return DemoContentRepository(ref.watch(demoDatabaseProvider));
 });
@@ -264,10 +258,7 @@ final pushNotificationServiceProvider = Provider<PushNotificationService?>((
       !ref.watch(pushNotificationsSupportedProvider)) {
     return null;
   }
-  return PushNotificationService(
-    FirebaseMessaging.instance,
-    _mivozFirestore,
-  );
+  return PushNotificationService(FirebaseMessaging.instance, _mivozFirestore);
 });
 
 // ---------------------------------------------------------------------------

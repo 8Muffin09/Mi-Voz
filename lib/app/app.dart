@@ -6,6 +6,7 @@ import '../core/theme/app_theme.dart';
 import '../features/communication/application/outbox.dart';
 import '../features/notifications/application/notification_bootstrap.dart';
 import '../features/notifications/application/request_watcher.dart';
+import '../features/child/presentation/widgets/child_status_notice_host.dart';
 import '../features/notifications/presentation/notification_host.dart';
 import 'router.dart';
 import 'routes.dart';
@@ -66,7 +67,12 @@ class _MiVozAppState extends ConsumerState<MiVozApp> {
             openRequest(childId, requestId);
           }
         },
-        child: child ?? const SizedBox.shrink(),
+        // Modo niño: "¡Tu adulto va en camino!" sobre cualquier pantalla.
+        child: ChildStatusNoticeHost(
+          onOpen: (requestId) =>
+              router.push(Routes.childCommunicate(requestId)),
+          child: child ?? const SizedBox.shrink(),
+        ),
       ),
     );
   }
