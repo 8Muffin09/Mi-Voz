@@ -95,10 +95,10 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
   }
 
   Future<void> _update(RequestStatus status) async {
-    String? note;
+    String? support;
     if (status == RequestStatus.resolved) {
-      note = await _askNote();
-      if (note == null) return;
+      support = await _askSupport(title: 'Marcar como resuelta');
+      if (support == null) return;
     }
     setState(() => _busy = true);
     if (!mounted) return;
@@ -106,23 +106,43 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       context,
       () => ref
           .read(communicationServiceProvider)
-          .updateStatus(widget.request, status, note: note),
+          .updateStatus(widget.request, status, support: support),
       success: 'Estado actualizado: ${status.label}',
     );
     if (mounted) setState(() => _busy = false);
   }
 
-  Future<String?> _askNote() {
-    final controller = TextEditingController();
+  Future<void> _registerSupport() async {
+    final support = await _askSupport(title: 'Apoyo brindado');
+    if (support == null || support.trim().isEmpty || !mounted) return;
+    await runGuarded(
+      context,
+      () => ref
+          .read(communicationServiceProvider)
+          .saveSupport(widget.request, support),
+      success: 'Apoyo registrado.',
+    );
+  }
+
+  /// Apoyo brindado: es la observación del adulto. La valoración del alumno
+  /// se registra aparte (y nunca se deduce de "Resuelta").
+  Future<String?> _askSupport({required String title}) {
+    final controller = TextEditingController(
+      text: widget.request.supportProvided ?? '',
+    );
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Marcar como resuelta'),
+        title: Text(title),
         content: TextField(
+          key: const Key('support-input'),
           controller: controller,
-          maxLength: 200,
+          maxLength: 500,
+          maxLines: 3,
           decoration: const InputDecoration(
-            labelText: 'Nota opcional (qué se hizo)',
+            labelText: 'Apoyo brindado (opcional)',
+            helperText: 'Qué hiciste para ayudar. Es tu observación.',
+            helperMaxLines: 2,
           ),
         ),
         actions: [
@@ -308,7 +328,16 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.warning),
           )
-        else if (r.status.isOpen) ...[
+        else ...[
+          const SizedBox(height: 8),
+          _SupportFollowUp(
+            request: r,
+            onRegister: r.status.index >= RequestStatus.attending.index
+                ? _registerSupport
+                : null,
+          ),
+        ],
+        if (!pending && r.status.isOpen) ...[
           if (r.status.index < RequestStatus.attending.index)
             FilledButton.icon(
               key: const Key('mark-attending'),
@@ -438,4 +467,89 @@ class _TimelineItem extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// Seguimiento del apoyo: lo que hizo el adulto, cómo dijo sentirse el
+/// alumno (por separado) y el historial de cambios. No es una evaluación
+/// clínica.
+class _SupportFollowUp extends ConsumerWidget {
+  const _SupportFollowUp({required this.request, required this.onRegister});
+
+  final CommunicationRequest request;
+  final VoidCallback? onRegister;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final r = request;
+    final events =
+        ref.watch(requestEventsProvider((r.childId, r.id))).value ??
+        const <RequestEvent>[];
+    final feedback = r.childFeedback;
+    return Card(
+      key: const Key('support-follow-up'),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Seguimiento del apoyo',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            _InfoRow(
+              'Apoyo brindado',
+              r.supportProvided == null
+                  ? 'Sin registrar'
+                  : '${r.supportProvided} · ${r.supportByName ?? ''}'
+                        '${r.supportAt == null ? '' : ' · ${formatDateTime(r.supportAt!)}'}',
+            ),
+            Row(
+              children: [
+                if (feedback != null && feedback != SupportFeedback.none) ...[
+                  SymbolImage(feedback.symbol, size: 32),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: _InfoRow(
+                    'El alumno dice',
+                    feedback?.label ?? 'Aún sin valoración',
+                  ),
+                ),
+              ],
+            ),
+            if (onRegister != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('register-support'),
+                  onPressed: onRegister,
+                  icon: const Icon(Icons.edit_note_rounded),
+                  label: Text(
+                    r.supportProvided == null
+                        ? 'Registrar apoyo brindado'
+                        : 'Editar apoyo brindado',
+                  ),
+                ),
+              ),
+            if (events.isNotEmpty) ...[
+              const Divider(),
+              const Text(
+                'Historial',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              for (final e in events)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '${formatDateTime(e.at)} · ${e.label} · ${e.byName}',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }

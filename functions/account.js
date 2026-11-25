@@ -17,7 +17,9 @@ const functionsV1 = require('firebase-functions/v1');
 const { logger } = require('firebase-functions/v2');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
-const db = getFirestore();
+const { DATABASE } = require('./database');
+
+const db = getFirestore(DATABASE);
 
 /** Borra los documentos de una consulta en lotes. */
 async function deleteQuery(query) {

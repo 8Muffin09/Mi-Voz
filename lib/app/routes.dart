@@ -26,6 +26,9 @@ class Routes {
   static const kidsAccess = '/kids';
 
   static const login = '/login';
+
+  /// "Revisa tu correo" (cuenta en la nube sin correo confirmado).
+  static const verifyEmail = '/verify-email';
   static const register = '/register';
   static const forgotPassword = '/forgot-password';
 

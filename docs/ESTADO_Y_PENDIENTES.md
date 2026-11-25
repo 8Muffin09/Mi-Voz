@@ -1,70 +1,77 @@
-# Estado del trabajo (28/10/2026)
+# Estado del trabajo (23/11/2026)
 
-Leyenda: **Verificado** = probado aquí con pruebas automáticas o capturas.
-**Código preparado** = escrito, compila, sin probar contra servicios reales.
-**Pendiente** = no hecho.
+Leyenda: **Terminada** = implementada y aprobada en pruebas automáticas
+(Dart y/o emuladores de Firebase). **Por verificar** = implementada, falta
+probarla en teléfonos con un proyecto real. **Bloqueada** = no puede avanzar
+sin una acción externa. No se indican responsables, fechas ni porcentajes.
 
-## 1. Diagnóstico
+## Terminadas
 
-Ya existían repositorios dobles (local / Firebase), reglas de Firestore y
-Storage, Cloud Functions (invitaciones, avisos, limpieza) y cola de envío
-idempotente. Faltaba el proyecto Firebase real; el usuario elegía
-"Modalidad"; avatares, pictogramas e interfaz usaban emojis.
+- Registro de adultos con perfil en `users/{uid}` (sin contraseña) y
+  reintento sin duplicar la cuenta.
+- Verificación de correo: pantalla "Revisa tu correo", reenvío con espera de
+  60 s, comprobación real del estado, cierre de sesión; exigida en reglas y
+  funciones.
+- Recuperación de contraseña; mensajes para enlace vencido y sin conexión.
+- Invitaciones: canje atómico (límite de usos, sin solicitudes ni membresías
+  duplicadas), correo verificado obligatorio, normalización de código
+  (`maxLength` corregido), aviso de "solo este dispositivo" en modo local.
+- Solicitudes: estados solo hacia adelante validados en el servidor, firma
+  con uid y hora del servidor, historial inmutable `events/`, doble toque
+  sin duplicar.
+- Seguimiento del apoyo: apoyo brindado (adulto) y valoración del alumno
+  (mejor / igual / peor / sin respuesta) por separado, en la solicitud y en
+  el pasaporte sensorial.
+- Cola sin conexión por cuenta: se conserva al cerrar sesión, no la envía
+  otra cuenta, migración de la cola anterior.
+- Reglas endurecidas: eliminadas las ramas heredadas de unión con códigos
+  antiguos.
+- Pruebas: 206 de Dart y 14 recorridos contra emuladores, todas aprobadas.
 
-## 2. Conexión y modelo de datos
+## Por verificar (necesitan proyecto Firebase y dos teléfonos)
 
-- La modalidad deja de ser una opción: `appModeProvider` usa la nube si está
-  configurada. Pantalla "Modalidad" eliminada. **Verificado** (pruebas).
-- Estados de sincronización para el usuario (`syncStatusProvider`,
-  `SyncStatusBanner`, `SyncStatusTile`). **Verificado** (pruebas).
-- Reglas: `avatar` ≤ 40 caracteres; `email` = el de la sesión.
-  **Código preparado** (sin desplegar).
-- Windows: Firebase no lo admite para producción; propuesta REST en
-  `docs/PLATAFORMAS.md`. **Pendiente de decisión.**
+- Recorrido completo de `docs/DEMO_DOS_TELEFONOS.md`.
+- Recepción real del correo de verificación y de recuperación en Gmail.
+- Escaneo del QR con la cámara.
+- Notificaciones push con la app cerrada o en segundo plano (FCM + función
+  `notifyOnRequestCreated`). Con la app abierta, la solicitud aparece en la
+  lista en tiempo real (listener de Firestore) aunque no haya push.
+- Funcionamiento en modo avión en un teléfono real.
 
-## 3. Registro
+## Bloqueadas
 
-`CreateAccountScreen`: logo, "Crear una cuenta", selector único "Tipo de
-perfil" (panel inferior en teléfono, menú en pantallas ≥ 600 px), sin rol
-preseleccionado, "Continuar", "¿Ya tienes una cuenta? Iniciar sesión".
-Después del registro: `GroupSetupScreen` (crear clase/familia o unirse con
-código). **Verificado** (pruebas de cada rol, selector y validación).
+| Actividad | Bloqueo | Acción necesaria |
+|---|---|---|
+| Vincular dos teléfonos | No hay proyecto Firebase (`firebase_options.dart` es un marcador) | Crear el proyecto y ejecutar `flutterfire configure` |
+| Códigos de invitación y push en la nube | Cloud Functions requieren el plan Blaze | Decidir y activar Blaze, luego `firebase deploy --only functions` |
+| iOS | Falta Mac con Xcode y clave APNs | — |
+| Windows con nube en producción | Firebase indica que en Windows es solo para desarrollo | Decidir: API REST (propuesta en `docs/PLATAFORMAS.md`) o Windows solo local |
 
-## 4. Recursos visuales
+## Limitaciones conocidas
 
-- 42 avatares SVG propios; 133 pictogramas ARASAAC; catálogo con
-  identificadores estables y traducción de emojis anteriores.
-- Selector de avatar rediseñado (vista previa, grupos, palomita); los campos
-  del formulario van antes de la galería.
-- Iconos Material en la interfaz; ilustraciones de grupo en pantallas vacías;
-  tutorial actualizado.
-- **Verificado**: pruebas de catálogo y capturas en `build/preview/`.
-
-## 5. Migración
-
-`LocalDataMigration` + `MigrationScreen` + `functions/migration.js`:
-cuenta local → contraseña de esa cuenta → perfiles elegidos → cuenta en la
-nube; idempotente; un perfil a una sola cuenta; los datos locales no se
-borran. **Verificado** con una "nube" simulada; **código preparado** contra
-Firebase.
-
-## 6. Validación
-
-`flutter analyze` sin avisos; `flutter test` 198 pruebas pasan;
-`flutter build apk --debug` compila. Sin probar: iOS, Windows, Firebase real,
-teclado físico/lector de pantalla en dispositivo.
+- El alumno no tiene identidad propia en el servidor: su dispositivo
+  funciona con la sesión del adulto autorizado que activó el perfil ("Entrar
+  al perfil de…"). Las reglas comprueban que ese adulto esté vinculado; las
+  acciones del niño quedan registradas con el uid de ese adulto. El PIN solo
+  protege el panel adulto en el teléfono; no autoriza nada en el servidor.
+  Para usar el perfil en otro teléfono, un adulto vinculado debe iniciar
+  sesión allí y activarlo.
+- Al rechazar una solicitud de unión, el uso del código ya consumido no se
+  devuelve.
+- El bloqueo por códigos incorrectos es por cuenta (5 en 15 minutos); no hay
+  App Check, así que no hay protección por dispositivo.
 
 ## Siguiente paso exacto
 
-1. Crear el proyecto Firebase y ejecutar `flutterfire configure` y los
-   despliegues de `docs/FIREBASE_SETUP.md` (requiere tu cuenta; Blaze para
-   funciones y Storage).
-2. Recorrer "Pruebas pendientes con el proyecto real" de ese documento.
-3. Decidir Windows (REST o solo local) — ver `docs/PLATAFORMAS.md`.
-4. Revisión de pictogramas con un profesional (lista en
-   `docs/RECURSOS_VISUALES.md`).
+1. Crear el proyecto Firebase, `flutterfire configure
+   --platforms=android,ios,windows`, desplegar reglas e índices
+   (`docs/FIREBASE_SETUP.md`).
+2. Decidir Blaze; si se activa: `firebase deploy --only functions`.
+3. Compilar el APK y seguir `docs/DEMO_DOS_TELEFONOS.md`, anotando
+   resultados.
 
-Herramientas en este equipo: `flutter` funciona; para `dart` usa
-`C:\Users\Sergi\dev\flutter\bin\cache\dart-sdk\bin\dart.exe` (el `dart` de
-`flutter\bin` falla porque no hay `git` en el PATH). No hay Node ni Firebase
-CLI.
+Herramientas instaladas en este equipo para las pruebas (fuera del
+proyecto): Node 22 portátil en `C:\Users\Sergi\dev\tools\node-v22.23.5-win-x64`
+y firebase-tools en `C:\Users\Sergi\dev\tools\fbtools`. Para usarlas en
+Git Bash:
+`export PATH="/c/Users/Sergi/dev/tools/node-v22.23.5-win-x64:/c/Users/Sergi/dev/tools/fbtools/node_modules/.bin:$PATH"`.

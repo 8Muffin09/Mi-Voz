@@ -81,6 +81,7 @@ class FirebaseRequestsRepository implements RequestsRepository {
     required RequestStatus status,
     required AppUser actor,
     String? note,
+    String? support,
   }) async {
     final now = FieldValue.serverTimestamp();
     final data = <String, dynamic>{
@@ -96,16 +97,96 @@ class FirebaseRequestsRepository implements RequestsRepository {
     }
     if (status == RequestStatus.resolved) data['resolvedAt'] = now;
     if (note != null && note.trim().isNotEmpty) data['note'] = note.trim();
-    // Firestore guarda el cambio en la caché local al instante y lo envía al
-    // volver la conexión, pero el Future solo termina con la confirmación del
-    // servidor: sin conexión se avisa en lugar de quedarse esperando.
+    final supportText = support?.trim() ?? '';
+    if (supportText.isNotEmpty) data.addAll(_supportFields(actor, supportText));
+    final ref = _col(request.childId).doc(request.id);
+    final batch = _db.batch()
+      ..update(ref, data)
+      ..set(_events(ref).doc(), _event(status.key, actor));
+    if (supportText.isNotEmpty) {
+      batch.set(_events(ref).doc(), _event('support', actor, supportText));
+    }
+    await _commit(batch);
+  }
+
+  @override
+  Future<void> saveSupport({
+    required CommunicationRequest request,
+    required AppUser actor,
+    required String support,
+  }) {
+    final ref = _col(request.childId).doc(request.id);
+    final text = support.trim();
+    return _commit(
+      _db.batch()
+        ..update(ref, _supportFields(actor, text))
+        ..set(_events(ref).doc(), _event('support', actor, text)),
+    );
+  }
+
+  @override
+  Future<void> setChildFeedback({
+    required CommunicationRequest request,
+    required AppUser actor,
+    required SupportFeedback feedback,
+  }) {
+    final ref = _col(request.childId).doc(request.id);
+    return _commit(
+      _db.batch()
+        ..update(ref, {
+          'childFeedback': feedback.name,
+          'childFeedbackAt': FieldValue.serverTimestamp(),
+        })
+        ..set(_events(ref).doc(), _event('feedback', actor, feedback.name)),
+    );
+  }
+
+  @override
+  Stream<List<RequestEvent>> watchEvents(String childId, String requestId) =>
+      _events(_col(childId).doc(requestId))
+          .orderBy('at')
+          .snapshots()
+          .map((q) => [for (final d in q.docs) RequestEvent.fromMap(d.data())]);
+
+  CollectionReference<Map<String, dynamic>> _events(
+    DocumentReference<Map<String, dynamic>> ref,
+  ) => ref.collection('events');
+
+  /// Las reglas exigen el uid de quien actúa y la hora del servidor.
+  static Map<String, dynamic> _event(
+    String type,
+    AppUser actor, [
+    String? detail,
+  ]) => {
+    'type': type,
+    'byUid': actor.uid,
+    'byName': actor.displayName,
+    'at': FieldValue.serverTimestamp(),
+    'detail': ?detail,
+  };
+
+  static Map<String, dynamic> _supportFields(AppUser actor, String text) => {
+    'supportProvided': text.length > 500 ? text.substring(0, 500) : text,
+    'supportByUid': actor.uid,
+    'supportByName': actor.displayName,
+    'supportAt': FieldValue.serverTimestamp(),
+  };
+
+  /// Firestore guarda el cambio en la caché local al instante y lo envía al
+  /// volver la conexión; el Future solo termina con la confirmación del
+  /// servidor. Sin conexión se avisa en lugar de quedarse esperando.
+  Future<void> _commit(WriteBatch batch) async {
     try {
-      await _col(request.childId)
-          .doc(request.id)
-          .update(data)
-          .timeout(const Duration(seconds: 10));
+      await batch.commit().timeout(const Duration(seconds: 10));
     } on TimeoutException {
       throw const SavedOfflineException();
+    } on FirebaseException catch (e) {
+      if (e.code == 'permission-denied') {
+        throw const PermissionDeniedException(
+          'Ya no tienes acceso a este perfil.',
+        );
+      }
+      rethrow;
     }
   }
 }

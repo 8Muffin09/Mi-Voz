@@ -10,6 +10,31 @@ El código está completo, pero falta **tu** proyecto: no se incluyen
 credenciales ni identificadores inventados. Nada de este documento se ha
 ejecutado contra un proyecto real.
 
+## Estado del proyecto `mi-voz-fc416` (25/11/2026)
+
+| Pieza | Estado |
+|---|---|
+| App Android y web registradas, `firebase_options.dart` y `google-services.json` | Configurado |
+| Firestore: base con nombre **`mivoz`** (no `(default)`) | Creada. La app, las funciones (`functions/database.js`) y `firebase.json` usan `mivoz` |
+| Hosting (`instalar.html` y versión web) | Publicado |
+| Reglas e índices de esta versión | **Pendiente de desplegar** |
+| Cloud Functions (invitaciones, avisos, limpieza) | **Nunca desplegadas**: la API de Cloud Functions está deshabilitada en el proyecto. Por eso "Generar código" no funciona. Requiere plan Blaze |
+
+Para dejarlo funcionando (desde la carpeta del proyecto, con tu sesión de
+`firebase login`):
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes --project mi-voz-fc416
+# Requiere plan Blaze (Consola → ⚙ → Uso y facturación → Modificar plan):
+cd functions && npm install && cd ..
+firebase deploy --only functions --project mi-voz-fc416
+```
+
+La primera vez, el despliegue de funciones habilita solo las API que
+necesita (Cloud Functions, Cloud Build, Artifact Registry, Eventarc). Si
+pregunta por la política de limpieza de imágenes de contenedores, acepta el
+valor sugerido (borra imágenes viejas y evita costos de almacenamiento).
+
 ## Qué servicio necesita qué plan
 
 | Servicio | Uso en Mi Voz | Plan |
@@ -29,11 +54,35 @@ subir fotos de pictogramas ni de perfil (los pictogramas y avatares con emoji
 sí funcionan). Blaze tiene un nivel gratuito amplio; configura una alerta de
 presupuesto en Google Cloud.
 
-> **Estado de verificación:** las reglas, los índices y las Cloud Functions
-> están escritos pero **no se han desplegado ni probado** contra un proyecto
-> Firebase real. Las mismas validaciones se probaron con la implementación
-> local ("Solo en este dispositivo"). Antes de usar la app con familias,
-> prueba los pasos de "6. Probar" y, si es posible, el emulador de Firebase.
+> **Estado de verificación (23/11/2026):** las reglas y las Cloud Functions
+> se probaron contra los **emuladores** de Firebase (14 recorridos entre
+> "dispositivos" independientes, todos aprobados: ver
+> `docs/PRUEBAS_Y_RESULTADOS.md`). **No se han desplegado ni probado contra
+> un proyecto real ni en teléfonos.** Para la demostración en dos teléfonos
+> sigue `docs/DEMO_DOS_TELEFONOS.md`.
+
+> **Para vincular dos teléfonos hace falta Blaze**: los códigos de
+> invitación los generan y validan Cloud Functions. Sin ellas, "Generar
+> código" falla con un error de conexión. No se activó ningún servicio de
+> pago: es una decisión tuya.
+
+### Correo verificado (lo exige el servidor)
+
+| Acción | Sin verificar | Dónde se aplica |
+|---|---|---|
+| Crear la cuenta, iniciar sesión, leer su perfil | Permitido | — |
+| Crear clase, familia o perfil infantil | Rechazado | `firestore.rules` → `verified()` |
+| Generar, consultar, canjear o aprobar invitaciones | Rechazado (`emailNotVerified`) | `functions/invitations.js` → `requireVerified` |
+
+La app muestra "Revisa tu correo" hasta que el token del servidor diga
+`email_verified`. El botón "Ya confirmé" recarga el usuario y pide un token
+nuevo: nunca marca la cuenta por sí mismo.
+
+En la consola: *Authentication → Plantillas → Idioma de la plantilla:
+Español* (la app además pide los correos en español con `setLanguageCode`).
+Los correos pueden llegar a spam con el remitente por defecto
+(`noreply@<proyecto>.firebaseapp.com`); para producción conviene un dominio
+propio (*Plantillas → Personalizar dominio*).
 
 ## Pasos
 
@@ -73,6 +122,15 @@ firebase deploy --only functions        # requiere Blaze
 Las funciones de invitaciones son *callable* (v2) en `us-central1`; la app las
 llama en esa región. Si las despliegas en otra, cambia la región en
 `invitationsRepositoryProvider` (`lib/app/providers.dart`).
+
+### 4b. Probar antes con los emuladores (sin proyecto real)
+```bash
+cd functions && npm install && cd ..
+cd firebase/tests && npm install && cd ../..
+firebase emulators:exec --project demo-mivoz --only auth,firestore,functions \
+  "node --test --test-concurrency=1 firebase/tests/flows.test.mjs"
+```
+Requiere Java 11+ (en este equipo: Temurin 21) y Node 22.
 
 ### 5. iOS (si compilas para iPhone)
 1. Apple Developer → crea una **APNs Auth Key (.p8)**.

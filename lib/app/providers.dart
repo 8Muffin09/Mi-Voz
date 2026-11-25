@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -45,6 +46,16 @@ import '../features/strategies/data/demo_strategies_repository.dart';
 import '../features/strategies/data/firebase_strategies_repository.dart';
 import '../features/strategies/data/strategies_repository.dart';
 import '../models/app_user.dart';
+
+/// Base de Firestore del proyecto: tiene nombre (`mivoz`), no es la base
+/// `(default)`. Las Cloud Functions usan la misma (functions/database.js) y
+/// firebase.json la indica en `firestore.database`.
+const firestoreDatabaseId = 'mivoz';
+
+FirebaseFirestore get _mivozFirestore => FirebaseFirestore.instanceFor(
+  app: Firebase.app(),
+  databaseId: firestoreDatabaseId,
+);
 
 /// Backend interno (no es una opción del usuario).
 enum AppMode {
@@ -136,7 +147,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   if (ref.watch(isFirebaseModeProvider)) {
     return FirebaseAuthRepository(
       FirebaseAuth.instance,
-      FirebaseFirestore.instance,
+      _mivozFirestore,
     );
   }
   return DemoAuthRepository(ref.watch(demoDatabaseProvider));
@@ -145,7 +156,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 final childrenRepositoryProvider = Provider<ChildrenRepository>((ref) {
   if (ref.watch(isFirebaseModeProvider)) {
     return FirebaseChildrenRepository(
-      FirebaseFirestore.instance,
+      _mivozFirestore,
       FirebaseStorage.instance,
     );
   }
@@ -154,14 +165,14 @@ final childrenRepositoryProvider = Provider<ChildrenRepository>((ref) {
 
 final familiesRepositoryProvider = Provider<FamiliesRepository>((ref) {
   if (ref.watch(isFirebaseModeProvider)) {
-    return FirebaseFamiliesRepository(FirebaseFirestore.instance);
+    return FirebaseFamiliesRepository(_mivozFirestore);
   }
   return DemoFamiliesRepository(ref.watch(demoDatabaseProvider));
 });
 
 final classesRepositoryProvider = Provider<ClassesRepository>((ref) {
   if (ref.watch(isFirebaseModeProvider)) {
-    return FirebaseClassesRepository(FirebaseFirestore.instance);
+    return FirebaseClassesRepository(_mivozFirestore);
   }
   return DemoClassesRepository(ref.watch(demoDatabaseProvider));
 });
@@ -169,7 +180,7 @@ final classesRepositoryProvider = Provider<ClassesRepository>((ref) {
 final invitationsRepositoryProvider = Provider<InvitationsRepository>((ref) {
   if (ref.watch(isFirebaseModeProvider)) {
     return FirebaseInvitationsRepository(
-      FirebaseFirestore.instance,
+      _mivozFirestore,
       // Misma región que `setGlobalOptions` en functions/index.js.
       FirebaseFunctions.instanceFor(region: 'us-central1'),
       uid: ref.watch(sessionUidProvider),
@@ -180,7 +191,7 @@ final invitationsRepositoryProvider = Provider<InvitationsRepository>((ref) {
 
 final requestsRepositoryProvider = Provider<RequestsRepository>((ref) {
   if (ref.watch(isFirebaseModeProvider)) {
-    return FirebaseRequestsRepository(FirebaseFirestore.instance);
+    return FirebaseRequestsRepository(_mivozFirestore);
   }
   return DemoRequestsRepository(
     ref.watch(demoDatabaseProvider),
@@ -207,7 +218,7 @@ final requestsRepositoryProvider = Provider<RequestsRepository>((ref) {
 final contentRepositoryProvider = Provider<ContentRepository>((ref) {
   if (ref.watch(isFirebaseModeProvider)) {
     return FirebaseContentRepository(
-      FirebaseFirestore.instance,
+      _mivozFirestore,
       FirebaseStorage.instance,
     );
   }
@@ -216,14 +227,14 @@ final contentRepositoryProvider = Provider<ContentRepository>((ref) {
 
 final passportRepositoryProvider = Provider<PassportRepository>((ref) {
   if (ref.watch(isFirebaseModeProvider)) {
-    return FirebasePassportRepository(FirebaseFirestore.instance);
+    return FirebasePassportRepository(_mivozFirestore);
   }
   return DemoPassportRepository(ref.watch(demoDatabaseProvider));
 });
 
 final strategiesRepositoryProvider = Provider<StrategiesRepository>((ref) {
   if (ref.watch(isFirebaseModeProvider)) {
-    return FirebaseStrategiesRepository(FirebaseFirestore.instance);
+    return FirebaseStrategiesRepository(_mivozFirestore);
   }
   return DemoStrategiesRepository(ref.watch(demoDatabaseProvider));
 });
@@ -255,7 +266,7 @@ final pushNotificationServiceProvider = Provider<PushNotificationService?>((
   }
   return PushNotificationService(
     FirebaseMessaging.instance,
-    FirebaseFirestore.instance,
+    _mivozFirestore,
   );
 });
 

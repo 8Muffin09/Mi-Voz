@@ -13,6 +13,7 @@ import '../../../models/group_invitation.dart';
 import '../../adult/presentation/widgets/section_header.dart';
 import '../../families/application/families_providers.dart';
 import '../../profiles/application/profiles_providers.dart';
+import 'invitation_widgets.dart';
 import '../application/invitations_providers.dart';
 import 'scan_invitation_screen.dart';
 
@@ -136,12 +137,15 @@ class _JoinScreenState extends ConsumerState<JoinScreen> {
             'familia. Se necesita conexión para validarlo.',
             style: TextStyle(color: AppColors.inkSoft),
           ),
+          const LocalOnlyInvitationsNotice(),
           const SizedBox(height: 16),
           TextField(
             key: const Key('join-code'),
             controller: _code,
             textCapitalization: TextCapitalization.characters,
-            maxLength: 8,
+            // Admite "X49X-VHGA" o "x49x vhga": se normaliza antes de enviar
+            // (8 caracteres sin espacios ni guiones).
+            maxLength: 12,
             textAlign: TextAlign.center,
             style: const TextStyle(
               fontSize: 26,

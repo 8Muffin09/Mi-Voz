@@ -14,6 +14,11 @@ import '../../notifications/application/in_app_notifications.dart';
 /// Toda solicitud se guarda primero en el dispositivo y solo sale de la cola
 /// cuando el servidor confirma su recepción. Como el id se genera en el
 /// cliente y la entrega es idempotente, los reintentos nunca duplican.
+///
+/// La cola es de cada cuenta (`request_outbox_<modo>_<uid>`): sobrevive al
+/// cierre de la app y al cierre de sesión, pero solo se envía cuando esa
+/// misma cuenta vuelve a iniciar sesión. Otra cuenta del mismo teléfono ni
+/// la ve ni la envía.
 class OutboxNotifier extends Notifier<List<CommunicationRequest>> {
   /// Espera entre reintentos: 15 s, 30 s, 1 min, 2 min… hasta 5 min. Se
   /// reintenta además al volver la conexión y al volver a abrir la app.
@@ -25,14 +30,26 @@ class OutboxNotifier extends Notifier<List<CommunicationRequest>> {
   bool _syncing = false;
   int _failures = 0;
   Timer? _retry;
-  late String _key;
+  String? _key;
+  String? _uid;
+
+  static String keyFor({required bool firebase, required String uid}) =>
+      '${LocalStore.keyOutbox}_${firebase ? 'firebase' : 'demo'}_$uid';
 
   @override
   List<CommunicationRequest> build() {
     final store = ref.watch(localStoreProvider);
     final firebase = ref.watch(isFirebaseModeProvider);
     ref.watch(requestsRepositoryProvider);
-    _key = '${LocalStore.keyOutbox}_${firebase ? 'firebase' : 'demo'}';
+    final uid = ref.watch(sessionUidProvider);
+    _uid = uid;
+    if (uid == null) {
+      _key = null;
+      return const [];
+    }
+    final key = keyFor(firebase: firebase, uid: uid);
+    _key = key;
+    _adoptLegacyQueue(store, firebase: firebase, uid: uid, key: key);
 
     final sub = ref.watch(connectivityServiceProvider).onlineChanges.listen((
       online,
@@ -45,24 +62,70 @@ class OutboxNotifier extends Notifier<List<CommunicationRequest>> {
     });
 
     final items = store
-        .getJsonList(_key)
+        .getJsonList(key)
         .map(
           (m) => CommunicationRequest.fromMap(
             m,
             delivery: DeliveryStatus.pendingSync,
           ),
         )
+        // Defensa adicional: nunca enviar algo creado por otra cuenta.
+        .where((r) => r.createdByUid == uid)
         .toList();
     if (items.isNotEmpty) Future.microtask(sync);
     return items;
   }
 
-  Future<void> _persist() => ref
-      .read(localStoreProvider)
-      .setJsonList(_key, state.map((r) => r.toMap()).toList());
+  /// Versiones anteriores usaban una sola cola para todas las cuentas. Se
+  /// reparte: cada solicitud pasa a la cola de quien la creó.
+  static void _adoptLegacyQueue(
+    LocalStore store, {
+    required bool firebase,
+    required String uid,
+    required String key,
+  }) {
+    final legacyKey =
+        '${LocalStore.keyOutbox}_${firebase ? 'firebase' : 'demo'}';
+    final legacy = store.getJsonList(legacyKey);
+    if (legacy.isEmpty) return;
+    final mine = [
+      for (final m in legacy)
+        if (m['createdByUid'] == uid) m,
+    ];
+    final others = [
+      for (final m in legacy)
+        if (m['createdByUid'] != uid) m,
+    ];
+    if (mine.isEmpty) return;
+    final current = store.getJsonList(key);
+    final ids = {for (final m in current) m['id']};
+    store.setJsonList(key, [
+      ...current,
+      for (final m in mine)
+        if (!ids.contains(m['id'])) m,
+    ]);
+    if (others.isEmpty) {
+      store.remove(legacyKey);
+    } else {
+      store.setJsonList(legacyKey, others);
+    }
+  }
+
+  Future<void> _persist() async {
+    final key = _key;
+    if (key == null) return;
+    await ref
+        .read(localStoreProvider)
+        .setJsonList(key, state.map((r) => r.toMap()).toList());
+  }
 
   /// Encola y trata de entregar. Devuelve el estado tras el intento.
   Future<CommunicationRequest> submit(CommunicationRequest request) async {
+    if (_uid == null || request.createdByUid != _uid) {
+      throw const PermissionDeniedException(
+        'La solicitud no corresponde a la cuenta con sesión.',
+      );
+    }
     final pending = request.copyWith(delivery: DeliveryStatus.pendingSync);
     state = [...state.where((r) => r.id != request.id), pending];
     await _persist();
@@ -81,7 +144,7 @@ class OutboxNotifier extends Notifier<List<CommunicationRequest>> {
       _failures = 0;
       ref.read(outboxFailuresProvider.notifier).set(0);
     }
-    if (_syncing || !ref.mounted || state.isEmpty) return;
+    if (_syncing || !ref.mounted || state.isEmpty || _uid == null) return;
     _syncing = true;
     _retry?.cancel();
     var failed = false;

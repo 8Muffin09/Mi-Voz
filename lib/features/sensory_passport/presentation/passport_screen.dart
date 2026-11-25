@@ -13,7 +13,9 @@ import '../../../core/widgets/dialogs.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../models/app_user.dart';
 import '../../../models/child_profile.dart';
+import '../../../models/communication_request.dart';
 import '../../../models/sensory_passport.dart';
+import '../../communication/application/requests_providers.dart';
 import '../../adult/presentation/widgets/child_guard.dart';
 import '../../profiles/application/profiles_providers.dart';
 import '../../../core/widgets/visuals.dart';
@@ -318,8 +320,90 @@ class _PassportViewState extends ConsumerState<_PassportView> {
             value: p.communicationPreferences,
             hint: 'Cómo prefiere comunicarse, cómo darle instrucciones…',
           ),
+          if (!_editing) SupportTrackingSection(childId: widget.child.id),
         ],
       ),
+    );
+  }
+}
+
+/// Seguimiento del apoyo recibido: qué comunicó el alumno, qué apoyo le
+/// dieron (observación del adulto) y cómo dijo sentirse (su valoración). No
+/// es un diagnóstico ni una evaluación clínica; "Resuelta" no se cuenta como
+/// "mejor".
+class SupportTrackingSection extends ConsumerWidget {
+  const SupportTrackingSection({super.key, required this.childId});
+
+  final String childId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final requests =
+        ref.watch(childRequestsProvider(childId)).value ??
+        const <CommunicationRequest>[];
+    final tracked = [
+      for (final r in requests)
+        if (r.supportProvided != null || r.childFeedback != null) r,
+    ];
+    final counts = {
+      for (final f in SupportFeedback.values)
+        f: tracked.where((r) => r.childFeedback == f).length,
+    };
+    final notAsked = tracked.where((r) => r.childFeedback == null).length;
+    return Column(
+      key: const Key('support-tracking'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const _Section(title: 'Seguimiento del apoyo'),
+        const Text(
+          'Lo que el alumno comunicó, el apoyo que recibió y cómo dijo '
+          'sentirse después. Es un registro de seguimiento, no un '
+          'diagnóstico.',
+          style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
+        ),
+        const SizedBox(height: 8),
+        if (tracked.isEmpty)
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(14),
+              child: Text('Todavía no hay apoyos registrados.'),
+            ),
+          )
+        else ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final f in SupportFeedback.values)
+                Chip(
+                  avatar: f == SupportFeedback.none
+                      ? const Icon(Icons.remove_rounded, size: 18)
+                      : SymbolImage(f.symbol, size: 22),
+                  label: Text('${f.label}: ${counts[f]}'),
+                ),
+              Chip(label: Text('Sin preguntar: $notAsked')),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final r in tracked.take(30))
+            Card(
+              child: ListTile(
+                leading: SymbolImage(r.emoji, size: 40),
+                title: Text(r.message),
+                subtitle: Text(
+                  [
+                    formatDateTime(r.createdAt),
+                    if (r.supportProvided != null)
+                      'Apoyo: ${r.supportProvided}'
+                          '${r.supportByName == null ? '' : ' (${r.supportByName})'}',
+                    'El alumno dice: ${r.childFeedback?.label ?? 'aún sin valoración'}',
+                  ].join('\n'),
+                ),
+                isThreeLine: true,
+              ),
+            ),
+        ],
+      ],
     );
   }
 }

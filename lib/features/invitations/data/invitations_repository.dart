@@ -6,7 +6,8 @@ import '../../../models/group_invitation.dart';
 /// Los mismos códigos (`reason`) los devuelven las Cloud Functions.
 enum InvitationError {
   invalid(
-    'El código no existe. Revisa que esté bien escrito o pide uno nuevo.',
+    'No encontramos una invitación con ese código. Revisa que esté bien '
+    'escrito o pide uno nuevo a quien te lo compartió.',
   ),
   expired('Este código ya venció. Pide al responsable que genere uno nuevo.'),
   revoked('Este código fue revocado por quien lo creó.'),

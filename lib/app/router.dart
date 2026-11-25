@@ -19,6 +19,7 @@ import '../features/authentication/presentation/forgot_password_screen.dart';
 import '../features/authentication/presentation/login_screen.dart';
 import '../features/authentication/presentation/register_screen.dart';
 import '../features/authentication/presentation/splash_screen.dart';
+import '../features/authentication/presentation/verify_email_screen.dart';
 import '../features/child/application/child_mode.dart';
 import '../features/access/presentation/widgets/role_illustration.dart';
 import '../features/classes/presentation/class_detail_screen.dart';
@@ -61,7 +62,8 @@ class _RouterRefresh extends ChangeNotifier {
     // refresco a mitad de una navegación la desharía.
     ref.listen(
       authStateProvider.select(
-        (a) => (a.isLoading && !a.hasValue, a.value?.uid),
+        (a) =>
+            (a.isLoading && !a.hasValue, a.value?.uid, a.value?.emailVerified),
       ),
       (_, _) => notifyListeners(),
     );
@@ -117,6 +119,12 @@ String? appRedirect(Ref ref, GoRouterState state) {
   if (user == null) {
     return _publicRoutes.contains(location) ? null : Routes.start;
   }
+  // Cuenta en la nube sin correo confirmado: solo "Revisa tu correo" (el
+  // servidor tampoco le deja crear grupos ni usar invitaciones).
+  if (ref.read(isFirebaseModeProvider) && !user.emailVerified) {
+    return location == Routes.verifyEmail ? null : Routes.verifyEmail;
+  }
+  if (location == Routes.verifyEmail) return Routes.adult;
   if (childModeId != null) {
     return location.startsWith(Routes.child) ? null : Routes.child;
   }
@@ -169,6 +177,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, _) => const KidsAccessScreen(),
       ),
       GoRoute(path: Routes.login, builder: (_, _) => const LoginScreen()),
+      GoRoute(
+        path: Routes.verifyEmail,
+        builder: (_, _) => const VerifyEmailScreen(),
+      ),
       GoRoute(path: Routes.register, builder: (_, _) => const RegisterScreen()),
       GoRoute(
         path: Routes.forgotPassword,

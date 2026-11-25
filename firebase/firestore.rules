@@ -21,13 +21,17 @@ service cloud.firestore {
       return request.auth.uid;
     }
 
+    // Correo confirmado según el token del servidor (no lo decide la app).
+    // Se exige para crear perfiles, familias y clases; las invitaciones
+    // (Cloud Functions) también lo exigen.
+    function verified() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
     function childPath(childId) {
       return /databases/$(database)/documents/children/$(childId);
     }
 
-    function invitationPath(code) {
-      return /databases/$(database)/documents/invitations/$(code);
-    }
 
     function familyPath(familyId) {
       return /databases/$(database)/documents/families/$(familyId);
@@ -77,13 +81,6 @@ service cloud.firestore {
       return role in ['madre', 'padre', 'tutor', 'docente', 'cuidador'];
     }
 
-    // Invitación sin usar y vigente para ese niño (estado previo al lote).
-    function validInvite(code, childId) {
-      let inv = get(invitationPath(code)).data;
-      return inv.childId == childId
-        && inv.usedBy == null
-        && inv.expiresAt > request.time;
-    }
 
     function optionalString(data, key, maxSize) {
       return data.get(key, null) == null
@@ -164,7 +161,7 @@ service cloud.firestore {
       // Solo un adulto con sesión crea perfiles: queda como único miembro o,
       // si lo crea en su familia, los miembros son exactamente los adultos de
       // esa familia. Nunca nace vinculado a clases.
-      allow create: if signedIn()
+      allow create: if verified()
         && request.resource.data.ownerUid == uid()
         && validChildProfile()
         && request.resource.data.get('classIds', []).size() == 0
@@ -266,13 +263,8 @@ service cloud.firestore {
                       .data.teacherUids.toSet())
               && responsibleIsMember())
           ))
-        ||
-        // Unión verificable con un código de invitación.
-        (!(uid() in resource.data.memberUids)
-          && changedKeys().hasOnly(['memberUids', 'joinCode'])
-          && request.resource.data.memberUids.toSet()
-              == resource.data.memberUids.toSet().union([uid()].toSet())
-          && validInvite(request.resource.data.joinCode, childId))
+        // Nadie se agrega a sí mismo: las incorporaciones solo ocurren en
+        // las Cloud Functions tras validar una invitación.
       );
 
       allow delete: if signedIn() && resource.data.ownerUid == uid();
@@ -289,14 +281,7 @@ service cloud.firestore {
             (adultUid == uid()
               && request.resource.data.permission == 'owner'
               && getAfter(childPath(childId)).data.ownerUid == uid())
-            ||
-            // Vínculo aceptado con invitación (mismo lote que la unión).
-            (adultUid == uid()
-              && request.resource.data.permission == 'caregiver'
-              && validInvite(request.resource.data.invitationCode, childId)
-              && request.resource.data.role
-                  == get(invitationPath(request.resource.data.invitationCode)).data.role
-              && uid() in getAfter(childPath(childId)).data.memberUids)
+
             ||
             // Al crear un perfil en una familia: vínculo autorizado (nunca
             // administrador) para cada adulto de esa familia.
@@ -329,6 +314,14 @@ service cloud.firestore {
       }
 
       // ------------------------------------------ communication_requests
+      // Estados de atención: new → seen → attending → resolved, siempre hacia
+      // adelante (se puede saltar un paso, nunca retroceder). Cada cambio lo
+      // firma el adulto con su uid y la hora del servidor, y deja un evento
+      // inmutable en events/. "Vista" la marca solo el adulto al abrirla.
+      function statusRank(s) {
+        return {'new': 0, 'seen': 1, 'attending': 2, 'resolved': 3}[s];
+      }
+
       match /communication_requests/{requestId} {
         allow read: if isMember(childId);
 
@@ -342,18 +335,63 @@ service cloud.firestore {
           && request.resource.data.message.size() > 0
           && request.resource.data.message.size() <= 300
           && request.resource.data.serverReceivedAt == request.time
-          && !request.resource.data.keys().hasAny(['notification']);
+          && !request.resource.data.keys().hasAny([
+            'notification', 'supportProvided', 'childFeedback'
+          ]);
 
-        // Los adultos solo cambian el estado de atención.
-        allow update: if isMember(childId)
-          && changedKeys().hasOnly([
-            'status', 'statusUpdatedAt', 'statusUpdatedByUid',
-            'statusUpdatedByName', 'seenAt', 'attendingAt', 'resolvedAt', 'note'
-          ])
-          && request.resource.data.status in ['seen', 'attending', 'resolved']
-          && request.resource.data.statusUpdatedByUid == uid();
+        // (a) Cambio de estado (puede incluir el apoyo brindado y una nota).
+        // (b) Apoyo brindado por el adulto, después de atender.
+        // (c) Valoración del alumno (la registra el dispositivo del niño,
+        //     que funciona con la sesión de un adulto autorizado).
+        allow update: if isMember(childId) && (
+          (changedKeys().hasOnly([
+              'status', 'statusUpdatedAt', 'statusUpdatedByUid',
+              'statusUpdatedByName', 'seenAt', 'attendingAt', 'resolvedAt',
+              'note', 'supportProvided', 'supportByUid', 'supportByName',
+              'supportAt'
+            ])
+            && request.resource.data.status in ['seen', 'attending', 'resolved']
+            && statusRank(request.resource.data.status)
+                > statusRank(resource.data.status)
+            && request.resource.data.statusUpdatedByUid == uid()
+            && request.resource.data.statusUpdatedAt == request.time
+            && validSupport())
+          ||
+          (changedKeys().hasOnly([
+              'supportProvided', 'supportByUid', 'supportByName', 'supportAt'
+            ])
+            && statusRank(resource.data.status) >= 2
+            && validSupport())
+          ||
+          (changedKeys().hasOnly(['childFeedback', 'childFeedbackAt'])
+            && request.resource.data.childFeedback
+                in ['better', 'same', 'worse', 'none']
+            && request.resource.data.childFeedbackAt == request.time)
+        );
+
+        function validSupport() {
+          return !changedKeys().hasAny(['supportProvided'])
+            || (request.resource.data.supportProvided is string
+              && request.resource.data.supportProvided.size() <= 500
+              && request.resource.data.supportByUid == uid()
+              && request.resource.data.supportAt == request.time);
+        }
 
         allow delete: if isOwner(childId);
+
+        // Historial de cambios: se agrega, nunca se edita ni se borra.
+        match /events/{eventId} {
+          allow read: if isMember(childId);
+          allow create: if isMember(childId)
+            && request.resource.data.byUid == uid()
+            && request.resource.data.at == request.time
+            && request.resource.data.type
+                in ['seen', 'attending', 'resolved', 'support', 'feedback']
+            && request.resource.data.keys().hasOnly([
+              'type', 'byUid', 'byName', 'at', 'detail'
+            ]);
+          allow update, delete: if false;
+        }
       }
 
       // ------------------------------------------------ sensory_passports
@@ -393,7 +431,7 @@ service cloud.firestore {
     match /families/{familyId} {
       allow read: if signedIn() && uid() in resource.data.adultUids;
 
-      allow create: if signedIn()
+      allow create: if verified()
         && request.resource.data.ownerUid == uid()
         && request.resource.data.adultUids == [uid()]
         && validName(request.resource.data, 60)
@@ -426,7 +464,7 @@ service cloud.firestore {
     match /classes/{classId} {
       allow read: if signedIn() && uid() in resource.data.teacherUids;
 
-      allow create: if signedIn()
+      allow create: if verified()
         && request.resource.data.ownerUid == uid()
         && request.resource.data.teacherUids == [uid()]
         && request.resource.data.studentIds.size() == 0

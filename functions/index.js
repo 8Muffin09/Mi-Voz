@@ -37,7 +37,9 @@ Object.assign(exports, require('./invitations'));
 Object.assign(exports, require('./account'));
 Object.assign(exports, require('./migration'));
 
-const db = getFirestore();
+const { DATABASE } = require('./database');
+
+const db = getFirestore(DATABASE);
 
 const INVALID_TOKEN_CODES = new Set([
   'messaging/registration-token-not-registered',
@@ -74,7 +76,7 @@ async function namesFor(childId, uids) {
 }
 
 exports.notifyOnRequestCreated = onDocumentCreated(
-  'children/{childId}/communication_requests/{requestId}',
+  { document: 'children/{childId}/communication_requests/{requestId}', database: DATABASE },
   async (event) => {
     const snap = event.data;
     if (!snap) return;
@@ -222,7 +224,7 @@ exports.notifyOnRequestCreated = onDocumentCreated(
 
 // Aviso a quien debe aprobar una solicitud para unirse a una familia o
 // vincular a un niño con una clase (la crea redeemInvitation).
-exports.notifyOnJoinRequest = onDocumentCreated('join_requests/{requestId}', async (event) => {
+exports.notifyOnJoinRequest = onDocumentCreated({ document: 'join_requests/{requestId}', database: DATABASE }, async (event) => {
   const snap = event.data;
   if (!snap) return;
   const request = snap.data();
@@ -253,7 +255,7 @@ exports.notifyOnJoinRequest = onDocumentCreated('join_requests/{requestId}', asy
   await Promise.allSettled(cleanup);
 });
 
-exports.cleanupOnChildDeleted = onDocumentDeleted('children/{childId}', async (event) => {
+exports.cleanupOnChildDeleted = onDocumentDeleted({ document: 'children/{childId}', database: DATABASE }, async (event) => {
   const { childId } = event.params;
   const childRef = db.doc(`children/${childId}`);
   await db.recursiveDelete(childRef);

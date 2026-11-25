@@ -1,16 +1,1 @@
-{
-  "firestore": {
-    "rules": "firebase/firestore.rules",
-    "indexes": "firebase/firestore.indexes.json"
-  },
-  "storage": {
-    "rules": "firebase/storage.rules"
-  },
-  "functions": [
-    {
-      "source": "functions",
-      "codebase": "default",
-      "ignore": ["node_modules", ".git", "*.local"]
-    }
-  ]
-}
+{"firestore":{"database":"mivoz","rules":"firebase/firestore.rules","indexes":"firebase/firestore.indexes.json"},"hosting":{"public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**","**/*.apk"]},"storage":{"rules":"firebase/storage.rules"},"functions":[{"source":"functions","codebase":"default","ignore":["node_modules",".git","*.local"]}],"emulators":{"auth":{"port":9099},"firestore":{"port":8080},"functions":{"port":5001},"storage":{"port":9199},"ui":{"enabled":false},"singleProjectMode":true},"flutter":{"platforms":{"android":{"default":{"projectId":"mi-voz-fc416","appId":"1:524914923521:android:1b35902789a5db48948800","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"mi-voz-fc416","configurations":{"android":"1:524914923521:android:1b35902789a5db48948800","web":"1:524914923521:web:8ea4027de19b10ac948800","windows":"1:524914923521:web:0c4440713f276b97948800"}}}}}}

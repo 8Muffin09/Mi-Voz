@@ -77,18 +77,28 @@ class LocalStore {
   Future<void> setJsonList(String key, List<Map<String, dynamic>> value) =>
       _prefs.setString(key, jsonEncode(value, toEncodable: _encodeExtra));
 
-  /// Elimina todas las cachés de perfiles infantiles y la cola de envío
-  /// (`request_outbox_demo` / `request_outbox_firebase`).
+  /// Al cerrar sesión: elimina las cachés de perfiles infantiles y el modo
+  /// niño. Las colas de envío (`request_outbox_<modo>_<uid>`) se conservan
+  /// para que una solicitud pendiente no se pierda: son de cada cuenta y solo
+  /// se envían cuando esa cuenta vuelve a iniciar sesión.
   Future<void> clearUserData() async {
     final keys = _prefs.getKeys().where(
       (k) =>
           k.startsWith('child_cache_') ||
           k.startsWith('content_cache_') ||
-          k.startsWith(keyOutbox) ||
           k == keyChildMode,
     );
     for (final k in keys.toList()) {
       await _prefs.remove(k);
+    }
+  }
+
+  /// Al eliminar una cuenta: también sus solicitudes pendientes.
+  Future<void> removeOutboxFor(String uid) async {
+    for (final k in _prefs.getKeys().toList()) {
+      if (k.startsWith(keyOutbox) && k.endsWith('_$uid')) {
+        await _prefs.remove(k);
+      }
     }
   }
 
