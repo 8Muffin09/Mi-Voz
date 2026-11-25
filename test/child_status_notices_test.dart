@@ -57,8 +57,10 @@ void main() {
     test('una solicitud nueva que ya llega atendida también avisa', () {
       final w = ChildStatusWatcher();
       w.update(const []);
-      expect(w.update([_request('b', RequestStatus.resolved)]).single.title,
-          '¡Listo! Ya atendieron tu mensaje');
+      expect(
+        w.update([_request('b', RequestStatus.resolved)]).single.title,
+        '¡Listo! Ya atendieron tu mensaje',
+      );
     });
 
     test('mensajes de hace horas no interrumpen al niño', () {
@@ -105,16 +107,24 @@ void main() {
 
     // El niño comunica y sale a su pantalla de inicio.
     final juan = (await tester.runAsync(
-      () => container.read(childrenRepositoryProvider).watchChild('demo-juan').first,
+      () => container
+          .read(childrenRepositoryProvider)
+          .watchChild('demo-juan')
+          .first,
     ))!;
     final service = container.read(communicationServiceProvider);
     final sent = (await tester.runAsync(
       () => service.send(
         child: juan,
-        draft: const PhraseDraft.fixed(text: 'Necesito agua', emoji: 'necesito_agua'),
+        draft: const PhraseDraft.fixed(
+          text: 'Necesito agua',
+          emoji: 'necesito_agua',
+        ),
       ),
     ))!;
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 200)));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 200)),
+    );
     await tester.pump();
     expect(find.byKey(const Key('child-status-notice')), findsNothing);
 

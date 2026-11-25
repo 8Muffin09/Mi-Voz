@@ -11,6 +11,7 @@ import '../../../models/child_profile.dart';
 import '../../../models/communication_request.dart';
 import '../../communication/application/communication_service.dart';
 import '../../communication/application/requests_providers.dart';
+import '../../communication/domain/support_suggestions.dart';
 import '../../../core/widgets/visuals.dart';
 import 'widgets/child_guard.dart';
 
@@ -94,10 +95,13 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     }
   }
 
-  Future<void> _update(RequestStatus status) async {
+  Future<void> _update(RequestStatus status, {String? suggested}) async {
     String? support;
     if (status == RequestStatus.resolved) {
-      support = await _askSupport(title: 'Marcar como resuelta');
+      support = await _askSupport(
+        title: 'Marcar como resuelta',
+        initial: suggested,
+      );
       if (support == null) return;
     }
     setState(() => _busy = true);
@@ -126,9 +130,9 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
 
   /// Apoyo brindado: es la observación del adulto. La valoración del alumno
   /// se registra aparte (y nunca se deduce de "Resuelta").
-  Future<String?> _askSupport({required String title}) {
+  Future<String?> _askSupport({required String title, String? initial}) {
     final controller = TextEditingController(
-      text: widget.request.supportProvided ?? '',
+      text: initial ?? widget.request.supportProvided ?? '',
     );
     return showDialog<String>(
       context: context,
@@ -337,6 +341,13 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
                 : null,
           ),
         ],
+        if (!pending && r.status.isOpen)
+          _PastSupportSuggestions(
+            request: r,
+            onUse: _busy
+                ? null
+                : (text) => _update(RequestStatus.resolved, suggested: text),
+          ),
         if (!pending && r.status.isOpen) ...[
           if (r.status.index < RequestStatus.attending.index)
             FilledButton.icon(
@@ -547,6 +558,100 @@ class _SupportFollowUp extends ConsumerWidget {
                   ),
                 ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "En otras ocasiones le ha servido": apoyos registrados antes para lo
+/// mismo (o la misma categoría), con lo que el alumno dijo después. Ayuda a
+/// decidir; no es una recomendación clínica.
+class _PastSupportSuggestions extends ConsumerWidget {
+  const _PastSupportSuggestions({required this.request, required this.onUse});
+
+  final CommunicationRequest request;
+  final ValueChanged<String>? onUse;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final history =
+        ref.watch(childRequestsProvider(request.childId)).value ??
+        const <CommunicationRequest>[];
+    final suggestions = SupportSuggestions.forRequest(request, history);
+    if (suggestions.isEmpty) return const SizedBox.shrink();
+    return Card(
+      key: const Key('past-support-suggestions'),
+      color: AppColors.primary.withValues(alpha: 0.06),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.tips_and_updates_outlined, color: AppColors.primary),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'En otras ocasiones le ha servido',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Apoyos que se registraron antes cuando comunicó algo parecido, '
+              'y cómo dijo sentirse después.',
+              style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
+            ),
+            for (final s in suggestions)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2, right: 8),
+                      child: s.better > 0
+                          ? SymbolImage(SupportFeedback.better.symbol, size: 28)
+                          : const Icon(
+                              Icons.history_rounded,
+                              size: 28,
+                              color: AppColors.inkSoft,
+                            ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            s.text,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            [
+                              if (!s.sameMessage) 'En una situación parecida',
+                              s.summary,
+                              'última vez ${formatDate(s.lastUsed)}',
+                            ].join(' · '),
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (onUse != null)
+                      TextButton(
+                        key: Key('use-suggestion-${suggestions.indexOf(s)}'),
+                        onPressed: () => onUse!(s.text),
+                        child: const Text('Usar'),
+                      ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),
