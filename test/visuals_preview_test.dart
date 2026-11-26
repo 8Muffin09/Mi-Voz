@@ -3,6 +3,7 @@
 //   flutter test test/visuals_preview_test.dart --dart-define=PREVIEW=true --update-goldens
 // y escribe build/preview/*.png.
 import 'package:flutter/material.dart';
+
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -119,8 +120,8 @@ void main() {
       await loader.load();
     }
 
-    final flutter = Platform.environment['FLUTTER_ROOT'] ??
-        r'C:\Users\Sergi\dev\flutter';
+    final flutter =
+        Platform.environment['FLUTTER_ROOT'] ?? r'C:\Users\Sergi\dev\flutter';
     await load('Atkinson', [
       'assets/fonts/AtkinsonHyperlegible-Regular.ttf',
       'assets/fonts/AtkinsonHyperlegible-Bold.ttf',

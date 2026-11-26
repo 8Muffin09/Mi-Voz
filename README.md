@@ -123,7 +123,7 @@ flutter analyze
 flutter test
 ```
 
-182 pruebas: construcción de frases, vocabulario y favoritos, permisos y roles,
+206 pruebas de Dart: construcción de frases, vocabulario y favoritos, permisos y roles,
 destinatario responsable, modelos, repositorios demo, cola sin conexión,
 historial, registro de familia y docente, creación y edición de perfiles y
 avatares, selección y cambio de perfil, cambio de cuenta y cierre de sesión,
@@ -148,8 +148,41 @@ flutter test integration_test/fase5_test.dart -d <dispositivo>
 Estas pruebas borran los datos de Mi Voz del dispositivo: úsalas en un
 emulador, no en un teléfono con datos reales.
 
-Las reglas de Firestore y las Cloud Functions no tienen pruebas automáticas
-todavía: requieren Node.js y el emulador de Firebase.
+Reglas de Firestore y Cloud Functions contra los **emuladores** de Firebase
+(14 recorridos entre dispositivos independientes: registro, verificación de
+correo, invitaciones por código, aprobación, solicitudes y sus estados,
+valoración del apoyo, cambio de cuenta, accesos no autorizados y
+revocación). Requiere Java 11+ y Node 22:
+
+```bash
+cd functions && npm install && cd ..
+cd firebase/tests && npm install && cd ../..
+firebase emulators:exec --project demo-mivoz --only auth,firestore,functions \
+  "node --test --test-concurrency=1 firebase/tests/flows.test.mjs"
+```
+
+Resultados y matriz de criterios: [docs/PRUEBAS_Y_RESULTADOS.md](docs/PRUEBAS_Y_RESULTADOS.md).
+Demostración en dos teléfonos: [docs/DEMO_DOS_TELEFONOS.md](docs/DEMO_DOS_TELEFONOS.md).
+Estado y pendientes: [docs/ESTADO_Y_PENDIENTES.md](docs/ESTADO_Y_PENDIENTES.md).
+
+## Cuentas, vinculaciones y solicitudes (con la nube)
+
+```
+Registro (rol en un desplegable) ──► users/{uid}  ──► "Revisa tu correo"
+                                                       │ (el servidor exige
+                                                       ▼  email_verified)
+Crear clase / familia ──► Invitar ──► createInvitation (función) ──► código + QR
+                                                       │
+Otro teléfono: Tengo un código ──► previewInvitation ──► redeemInvitation
+   (transacción: vigencia, usos, duplicados) ──► unión directa o join_requests
+   ──► reviewJoinRequest (solo quien administra el grupo)
+                                                       │
+Niño: pictogramas ──► COMUNICAR ──► cola local por cuenta ──► Firestore
+   children/{id}/communication_requests/{rid}  (estado new)
+   ──► adulto: Vista ─► En atención ─► Resuelta (+ apoyo brindado)
+       cada paso deja events/{eid} (inmutable)
+   ──► niño: "¿Cómo te sientes ahora?" (opcional) ──► childFeedback
+```
 
 ## Imagen, icono y melodía
 

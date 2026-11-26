@@ -78,11 +78,24 @@ class FirebaseAuthRepository implements AuthRepository {
     Set<UserExperience> experiences = const {},
   }) async {
     try {
-      final cred = await _auth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password,
-      );
-      final user = cred.user!;
+      await _auth.setLanguageCode('es');
+      User user;
+      try {
+        final cred = await _auth.createUserWithEmailAndPassword(
+          email: email.trim(),
+          password: password,
+        );
+        user = cred.user!;
+      } on FirebaseAuthException catch (e) {
+        if (e.code != 'email-already-in-use') rethrow;
+        // Reintento de un registro que se cortó después de crear la cuenta:
+        // con la misma contraseña se completa el perfil de ESA cuenta (mismo
+        // uid). Si el perfil ya existe, es una cuenta registrada: se pide
+        // iniciar sesión. Nunca se crea una segunda cuenta.
+        final existing = await _resumeRegistration(email, password);
+        if (existing == null) rethrow;
+        user = existing;
+      }
       await user.updateDisplayName(displayName.trim());
       String? clean(String? v) =>
           (v?.trim().isEmpty ?? true) ? null : v!.trim();
@@ -104,11 +117,35 @@ class FirebaseAuthRepository implements AuthRepository {
         ...appUser.profileMap(),
         'createdAt': FieldValue.serverTimestamp(),
       });
-      // La verificación de correo es recomendable, pero no bloquea el acceso.
-      await user.sendEmailVerification().catchError((_) {});
-      return appUser;
+      // La cuenta queda guardada; el correo confirma que es de quien se
+      // registra. Hasta entonces el servidor no deja crear grupos ni perfiles.
+      if (!user.emailVerified) {
+        await user.sendEmailVerification().catchError((_) {});
+      }
+      return appUser.copyWith(emailVerified: user.emailVerified);
     } on FirebaseAuthException catch (e) {
       throw AppException(_message(e), code: e.code);
+    }
+  }
+
+  /// Inicia sesión con la cuenta a medio registrar. Devuelve el usuario si su
+  /// perfil aún no existe; `null` si la contraseña no coincide o el perfil
+  /// ya estaba completo.
+  Future<User?> _resumeRegistration(String email, String password) async {
+    try {
+      final cred = await _auth.signInWithEmailAndPassword(
+        email: email.trim(),
+        password: password,
+      );
+      final user = cred.user!;
+      final profile = await _userDoc(user.uid).get();
+      if (profile.exists) {
+        await _auth.signOut();
+        return null;
+      }
+      return user;
+    } on FirebaseAuthException {
+      return null;
     }
   }
 
@@ -230,11 +267,17 @@ class FirebaseAuthRepository implements AuthRepository {
     'user-not-found' ||
     'wrong-password' ||
     'invalid-credential' => 'Correo o contraseña incorrectos.',
-    'email-already-in-use' => 'Ya existe una cuenta con ese correo.',
+    'email-already-in-use' =>
+      'Ya existe una cuenta con ese correo. Inicia sesión o recupera tu '
+          'contraseña.',
     'weak-password' => 'La contraseña es demasiado débil.',
     'too-many-requests' =>
       'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.',
-    'network-request-failed' => 'Sin conexión a internet.',
+    'network-request-failed' =>
+      'Sin conexión a internet. Revisa tu conexión e inténtalo de nuevo.',
+    'expired-action-code' || 'invalid-action-code' =>
+      'El enlace venció o ya se usó. Pide un correo nuevo.',
+    'missing-email' => 'Escribe tu correo.',
     'requires-recent-login' =>
       'Por seguridad, vuelve a iniciar sesión e inténtalo de nuevo.',
     'operation-not-allowed' =>

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mi_voz/features/communication/application/outbox.dart';
 import 'package:mi_voz/app/providers.dart';
 import 'package:mi_voz/core/demo/demo_database.dart';
 import 'package:mi_voz/core/demo/demo_seed.dart';
@@ -357,13 +358,18 @@ void main() {
   });
 
   group('Cambio de cuenta y cierre de sesión', () {
-    test('cerrar sesión borra modo niño, cachés y la cola de envío', () async {
+    test('cerrar sesión borra modo niño y cachés; la cola pendiente queda '
+        'guardada solo para esa cuenta', () async {
+      final mariaQueue = OutboxNotifier.keyFor(
+        firebase: false,
+        uid: DemoSeed.maria.uid,
+      );
       final c = await signedInContainer(
         DemoSeed.maria.uid,
         extra: {
           LocalStore.keyChildMode: 'demo-juan',
           LocalStore.childCacheKey('demo-juan'): '{}',
-          '${LocalStore.keyOutbox}_demo': '[]',
+          mariaQueue: '[]',
         },
       );
       addTearDown(c.dispose);
@@ -374,7 +380,9 @@ void main() {
       expect(c.read(currentUserProvider), isNull);
       expect(c.read(childModeProvider), isNull);
       expect(prefs.getString(LocalStore.childCacheKey('demo-juan')), isNull);
-      expect(prefs.getString('${LocalStore.keyOutbox}_demo'), isNull);
+      // No se pierde lo pendiente, pero sin sesión no se muestra ni se envía.
+      expect(prefs.getString(mariaQueue), '[]');
+      expect(c.read(outboxProvider), isEmpty);
     });
 
     test('cambiar de cuenta: la siguiente no ve lo de la anterior', () async {

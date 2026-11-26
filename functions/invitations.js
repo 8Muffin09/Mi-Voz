@@ -21,7 +21,9 @@ const crypto = require('crypto');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 
-const db = getFirestore();
+const { DATABASE } = require('./database');
+
+const db = getFirestore(DATABASE);
 
 const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 8;
@@ -44,6 +46,23 @@ function fail(reason, code = 'failed-precondition') {
 function requireAuth(request) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Inicia sesión.');
   return request.auth;
+}
+
+/**
+ * Generar, consultar, canjear y aprobar invitaciones exige un correo
+ * verificado: así nadie puede crear cuentas desechables para probar
+ * códigos ni actuar con un correo que no le pertenece. Se comprueba en el
+ * token del servidor, no en lo que diga la app.
+ */
+function requireVerified(request) {
+  const auth = requireAuth(request);
+  if (auth.token.email_verified !== true) fail('emailNotVerified', 'permission-denied');
+  return auth;
+}
+
+/** Una sola solicitud por persona, grupo y niño: el id lo garantiza. */
+function joinRequestId(uid, targetId, childId) {
+  return `${uid}_${targetId}_${childId || 'adulto'}`;
 }
 
 function normalize(code) {
@@ -119,8 +138,7 @@ async function validate(uid, rawCode) {
 // ----------------------------------------------------------------- crear
 
 exports.createInvitation = onCall(async (request) => {
-  const auth = requireAuth(request);
-  if (auth.token.email_verified !== true) fail('emailNotVerified', 'permission-denied');
+  const auth = requireVerified(request);
   const { type, targetId } = request.data || {};
   const validityHours = Number(request.data?.validityHours);
   const maxUses = Number(request.data?.maxUses);
@@ -199,7 +217,7 @@ exports.revokeInvitation = onCall(async (request) => {
 // ----------------------------------------------------------- vista previa
 
 exports.previewInvitation = onCall(async (request) => {
-  const auth = requireAuth(request);
+  const auth = requireVerified(request);
   const { code, inv } = await validate(auth.uid, request.data?.code);
   return {
     code,
@@ -284,18 +302,17 @@ async function canLinkChild(child, uid) {
 }
 
 exports.redeemInvitation = onCall(async (request) => {
-  const auth = requireAuth(request);
+  const auth = requireVerified(request);
   const { code, inv } = await validate(auth.uid, request.data?.code);
   const childId = typeof request.data?.childId === 'string' ? request.data.childId : null;
   const profile = await userProfile(auth.uid);
   const name = profile.displayName || 'Adulto';
 
   let approverUid;
-  let child = null;
+  let childName = null;
   if (inv.type === 'family') {
     const family = await db.doc(`families/${inv.targetId}`).get();
     if (!family.exists) fail('invalid', 'not-found');
-    if ((family.get('adultUids') || []).includes(auth.uid)) fail('alreadyMember');
     approverUid = family.get('ownerUid');
   } else {
     const klass = await db.doc(`classes/${inv.targetId}`).get();
@@ -305,28 +322,35 @@ exports.redeemInvitation = onCall(async (request) => {
     if (!childSnap.exists || !(await canLinkChild(childSnap.data(), auth.uid))) {
       fail('childNotAllowed', 'permission-denied');
     }
-    child = childSnap.data();
-    if ((child.classIds || []).includes(inv.targetId)) fail('alreadyLinked');
+    childName = childSnap.get('name') || null;
     approverUid = klass.get('ownerUid');
   }
 
-  // Duplicados: una sola solicitud pendiente por persona (y niño) y grupo.
-  let pending = db.collection(REQUESTS)
-    .where('requesterUid', '==', auth.uid)
-    .where('targetId', '==', inv.targetId)
-    .where('status', '==', 'pending');
-  if (childId) pending = pending.where('childId', '==', childId);
-  if (!(await pending.limit(1).get()).empty) fail('alreadyRequested');
-
   const invRef = db.doc(`${INVITATIONS}/${code}`);
+  const reqRef = db.doc(`${REQUESTS}/${joinRequestId(auth.uid, inv.targetId, childId)}`);
+  const familyRef = inv.type === 'family' ? db.doc(`families/${inv.targetId}`) : null;
+  const classRef = inv.type === 'classroom' ? db.doc(`classes/${inv.targetId}`) : null;
+  const childRef = childId ? db.doc(`children/${childId}`) : null;
+
+  // Todo se vuelve a leer y decidir dentro de la transacción: dos toques
+  // simultáneos (o dos personas con el último uso del código) no pueden
+  // superar el límite ni crear membresías o solicitudes duplicadas.
   const outcome = await db.runTransaction(async (tx) => {
-    // Se vuelve a leer dentro de la transacción: usos concurrentes.
     const fresh = await tx.get(invRef);
+    const existing = await tx.get(reqRef);
+    const family = familyRef ? (await tx.get(familyRef)).data() : null;
+    const klass = classRef ? (await tx.get(classRef)).data() : null;
+    const child = childRef ? (await tx.get(childRef)).data() : null;
+
     const status = statusOf(fresh.data());
     if (status !== 'active') fail(status);
+    if (family && (family.adultUids || []).includes(auth.uid)) fail('alreadyMember');
+    if (child && (child.classIds || []).includes(inv.targetId)) fail('alreadyLinked');
+    if (existing.exists && existing.get('status') === 'pending') fail('alreadyRequested');
+
     if (inv.requiresApproval !== false) {
       tx.update(invRef, { uses: FieldValue.increment(1) });
-      tx.set(db.collection(REQUESTS).doc(), {
+      tx.set(reqRef, {
         code,
         type: inv.type,
         targetId: inv.targetId,
@@ -335,23 +359,17 @@ exports.redeemInvitation = onCall(async (request) => {
         requesterName: name,
         approverUid,
         childId,
-        childName: child ? child.name : null,
+        childName,
         role: inv.role || null,
         status: 'pending',
         createdAt: FieldValue.serverTimestamp(),
       });
       return 'pendingApproval';
     }
-    if (inv.type === 'family') {
-      const familyRef = db.doc(`families/${inv.targetId}`);
-      const family = (await tx.get(familyRef)).data();
+    if (family) {
       await joinFamily(tx, familyRef, family, auth.uid, name, profile.email, inv.role || 'tutor');
     } else {
-      const classRef = db.doc(`classes/${inv.targetId}`);
-      const childRef = db.doc(`children/${childId}`);
-      const klass = (await tx.get(classRef)).data();
-      const freshChild = (await tx.get(childRef)).data();
-      await linkChildToClass(tx, classRef, klass, childRef, freshChild);
+      await linkChildToClass(tx, classRef, klass, childRef, child);
     }
     tx.update(invRef, { uses: FieldValue.increment(1) });
     return 'joined';
@@ -362,7 +380,7 @@ exports.redeemInvitation = onCall(async (request) => {
 // ---------------------------------------------------------------- aprobar
 
 exports.reviewJoinRequest = onCall(async (request) => {
-  const auth = requireAuth(request);
+  const auth = requireVerified(request);
   const requestId = request.data?.requestId;
   const approve = request.data?.approve === true;
   if (typeof requestId !== 'string') fail('notAllowed', 'invalid-argument');

@@ -192,6 +192,7 @@ class SessionActions {
     await photos.delete(user.photo);
     await _ref.read(pushNotificationServiceProvider)?.unregister();
     await _ref.read(childModeProvider.notifier).exit();
+    await _ref.read(localStoreProvider).removeOutboxFor(user.uid);
     await _ref.read(localStoreProvider).clearUserData();
     await auth.deleteAccount(password: password);
   }

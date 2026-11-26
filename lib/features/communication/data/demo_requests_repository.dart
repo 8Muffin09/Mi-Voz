@@ -103,6 +103,7 @@ class DemoRequestsRepository implements RequestsRepository {
     required RequestStatus status,
     required AppUser actor,
     String? note,
+    String? support,
   }) async {
     final row = _db.get(DemoDatabase.requests, request.id);
     final childRow = _db.get(DemoDatabase.children, request.childId);
@@ -129,7 +130,117 @@ class DemoRequestsRepository implements RequestsRepository {
       resolvedAt: status == RequestStatus.resolved ? now : null,
       note: note,
     );
-    _db.put(DemoDatabase.requests, request.id, updated.toMap());
+    final supportText = support?.trim() ?? '';
+    final withSupport = supportText.isEmpty
+        ? updated
+        : updated.copyWith(
+            supportProvided: supportText,
+            supportByUid: actor.uid,
+            supportByName: actor.displayName,
+            supportAt: now,
+          );
+    _db.put(DemoDatabase.requests, request.id, {
+      ...withSupport.toMap(),
+      'events': [
+        ..._eventRows(row),
+        _eventRow(status.key, actor, now),
+        if (supportText.isNotEmpty)
+          _eventRow('support', actor, now, supportText),
+      ],
+    });
     _db.commit();
   }
+
+  @override
+  Future<void> saveSupport({
+    required CommunicationRequest request,
+    required AppUser actor,
+    required String support,
+  }) async {
+    final row = _requireMemberRow(request, actor);
+    final current = CommunicationRequest.fromMap(row);
+    if (current.status.index < RequestStatus.attending.index) {
+      throw const AppException('Primero marca la solicitud como en atención.');
+    }
+    final now = DateTime.now();
+    _db.put(DemoDatabase.requests, request.id, {
+      ...current
+          .copyWith(
+            supportProvided: support.trim(),
+            supportByUid: actor.uid,
+            supportByName: actor.displayName,
+            supportAt: now,
+          )
+          .toMap(),
+      'events': [
+        ..._eventRows(row),
+        _eventRow('support', actor, now, support.trim()),
+      ],
+    });
+    _db.commit();
+  }
+
+  @override
+  Future<void> setChildFeedback({
+    required CommunicationRequest request,
+    required AppUser actor,
+    required SupportFeedback feedback,
+  }) async {
+    final row = _requireMemberRow(request, actor);
+    final now = DateTime.now();
+    _db.put(DemoDatabase.requests, request.id, {
+      ...CommunicationRequest.fromMap(row)
+          .copyWith(childFeedback: feedback, childFeedbackAt: now)
+          .toMap(),
+      'events': [
+        ..._eventRows(row),
+        _eventRow('feedback', actor, now, feedback.name),
+      ],
+    });
+    _db.commit();
+  }
+
+  @override
+  Stream<List<RequestEvent>> watchEvents(String childId, String requestId) =>
+      _db.watch(() {
+        if (!_db.sessionIsMemberOf(childId)) return const <RequestEvent>[];
+        final row = _db.get(DemoDatabase.requests, requestId);
+        return row == null
+            ? const <RequestEvent>[]
+            : [for (final e in _eventRows(row)) RequestEvent.fromMap(e)];
+      });
+
+  Map<String, dynamic> _requireMemberRow(
+    CommunicationRequest request,
+    AppUser actor,
+  ) {
+    final row = _db.get(DemoDatabase.requests, request.id);
+    final childRow = _db.get(DemoDatabase.children, request.childId);
+    if (row == null || childRow == null) {
+      throw const AppException('La solicitud ya no existe.');
+    }
+    final child = ChildProfile.fromMap(childRow);
+    if (!Permissions.canUpdateRequest(child, actor.uid)) {
+      throw const PermissionDeniedException();
+    }
+    return row;
+  }
+
+  static Map<String, dynamic> _eventRow(
+    String type,
+    AppUser actor,
+    DateTime at, [
+    String? detail,
+  ]) => RequestEvent(
+    type: type,
+    byUid: actor.uid,
+    byName: actor.displayName,
+    at: at,
+    detail: detail,
+  ).toMap();
+
+  static List<Map<String, dynamic>> _eventRows(Map<String, dynamic> row) => [
+    for (final e in (row['events'] as List?) ?? const [])
+      if (e is Map) Map<String, dynamic>.from(e),
+  ];
 }

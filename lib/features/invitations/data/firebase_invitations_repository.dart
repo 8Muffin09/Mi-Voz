@@ -46,7 +46,13 @@ class FirebaseInvitationsRepository implements InvitationsRepository {
       if (e.code == 'permission-denied' || e.code == 'unauthenticated') {
         throw const PermissionDeniedException();
       }
-      throw AppException(e.message ?? 'No se pudo completar la operación.');
+      // Sin motivo conocido: la función no está desplegada o falló en el
+      // servidor. No se muestra el código técnico ("NOT_FOUND", "internal").
+      throw const AppException(
+        'El servicio de invitaciones no está disponible en este momento. '
+        'Inténtalo más tarde; si continúa, avisa a quien administra Mi Voz.',
+        code: 'invitations-unavailable',
+      );
     }
   }
 

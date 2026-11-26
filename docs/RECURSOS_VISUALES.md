@@ -39,6 +39,12 @@ para ver candidatos, anota el número elegido en `selection.json`, ejecuta
 identificadores). Para sustituir uno existente cambia solo el número: el
 identificador se conserva.
 
+**Volumen:** el generador convierte cada color de relleno en un degradado
+radial (luz arriba a la izquierda, sombra abajo a la derecha) para un
+acabado tipo plastilina. Solo usa degradados, que flutter_svg dibuja igual en
+Android, iOS y Windows; ojos, mejillas y brillos quedan planos para que la
+expresión se lea nítida.
+
 **Avatar:** edita o agrega el dibujo en `tool/avatars/generate_avatars.dart`,
 ejecuta `dart run tool/avatars/generate_avatars.dart` y registra el
 identificador y su descripción accesible en `avatar_catalog.dart`. Revisa la

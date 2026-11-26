@@ -15,6 +15,34 @@ flutter build apk --release --split-per-abi
 ```
 (La mayoría de teléfonos actuales usan `app-arm64-v8a-release.apk`.)
 
+## Publicar una versión para descargar (enlace público)
+
+La página `web/instalar.html` (publicada en Firebase Hosting como
+`https://mi-voz-fc416.web.app/instalar.html`) enlaza siempre a la **última
+versión** de GitHub Releases:
+
+- `releases/latest/download/mi-voz-arm64.apk` (recomendado, ~35 MB)
+- `releases/latest/download/mi-voz.apk` (cualquier Android, ~87 MB)
+
+Pasos para cada versión nueva:
+
+1. Sube `version:` en `pubspec.yaml` (por ejemplo `1.0.2+3`).
+2. `powershell -ExecutionPolicy Bypass -File tool\publicar_apk.ps1`
+3. En <https://github.com/8Muffin09/Mi-Voz/releases/new> crea la etiqueta
+   `v1.0.2`, adjunta `build\release\mi-voz-arm64.apk`,
+   `build\release\mi-voz.apk` y `build\release\SHA256SUMS.txt`, y publica.
+4. Si cambiaste la página: `flutter build web` y
+   `firebase deploy --only hosting --project mi-voz-fc416`.
+
+Los nombres de los archivos deben ser exactamente esos: si una versión los
+sube con otro nombre, el enlace "latest" devuelve error 404.
+
+Los APK se firman con la clave de depuración de **esta PC**: las versiones
+compiladas aquí se instalan encima de las anteriores. Un APK compilado en otra
+computadora tendría otra firma y Android pediría desinstalar primero (se
+pierden los datos locales). Para Google Play o para compilar en varias
+computadoras, crea una clave propia (sección "Firma para publicar").
+
 ## Instalar el APK en un teléfono
 
 - Por cable: `adb install build/app/outputs/flutter-apk/app-release.apk`

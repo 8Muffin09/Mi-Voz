@@ -11,6 +11,7 @@ import '../../../models/child_profile.dart';
 import '../../../models/communication_request.dart';
 import '../../communication/application/communication_service.dart';
 import '../../communication/application/requests_providers.dart';
+import '../../communication/domain/support_suggestions.dart';
 import '../../../core/widgets/visuals.dart';
 import 'widgets/child_guard.dart';
 
@@ -94,11 +95,14 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
     }
   }
 
-  Future<void> _update(RequestStatus status) async {
-    String? note;
+  Future<void> _update(RequestStatus status, {String? suggested}) async {
+    String? support;
     if (status == RequestStatus.resolved) {
-      note = await _askNote();
-      if (note == null) return;
+      support = await _askSupport(
+        title: 'Marcar como resuelta',
+        initial: suggested,
+      );
+      if (support == null) return;
     }
     setState(() => _busy = true);
     if (!mounted) return;
@@ -106,23 +110,43 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
       context,
       () => ref
           .read(communicationServiceProvider)
-          .updateStatus(widget.request, status, note: note),
+          .updateStatus(widget.request, status, support: support),
       success: 'Estado actualizado: ${status.label}',
     );
     if (mounted) setState(() => _busy = false);
   }
 
-  Future<String?> _askNote() {
-    final controller = TextEditingController();
+  Future<void> _registerSupport() async {
+    final support = await _askSupport(title: 'Apoyo brindado');
+    if (support == null || support.trim().isEmpty || !mounted) return;
+    await runGuarded(
+      context,
+      () => ref
+          .read(communicationServiceProvider)
+          .saveSupport(widget.request, support),
+      success: 'Apoyo registrado.',
+    );
+  }
+
+  /// Apoyo brindado: es la observación del adulto. La valoración del alumno
+  /// se registra aparte (y nunca se deduce de "Resuelta").
+  Future<String?> _askSupport({required String title, String? initial}) {
+    final controller = TextEditingController(
+      text: initial ?? widget.request.supportProvided ?? '',
+    );
     return showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Marcar como resuelta'),
+        title: Text(title),
         content: TextField(
+          key: const Key('support-input'),
           controller: controller,
-          maxLength: 200,
+          maxLength: 500,
+          maxLines: 3,
           decoration: const InputDecoration(
-            labelText: 'Nota opcional (qué se hizo)',
+            labelText: 'Apoyo brindado (opcional)',
+            helperText: 'Qué hiciste para ayudar. Es tu observación.',
+            helperMaxLines: 2,
           ),
         ),
         actions: [
@@ -308,7 +332,23 @@ class _DetailBodyState extends ConsumerState<_DetailBody> {
             textAlign: TextAlign.center,
             style: TextStyle(color: AppColors.warning),
           )
-        else if (r.status.isOpen) ...[
+        else ...[
+          const SizedBox(height: 8),
+          _SupportFollowUp(
+            request: r,
+            onRegister: r.status.index >= RequestStatus.attending.index
+                ? _registerSupport
+                : null,
+          ),
+        ],
+        if (!pending && r.status.isOpen)
+          _PastSupportSuggestions(
+            request: r,
+            onUse: _busy
+                ? null
+                : (text) => _update(RequestStatus.resolved, suggested: text),
+          ),
+        if (!pending && r.status.isOpen) ...[
           if (r.status.index < RequestStatus.attending.index)
             FilledButton.icon(
               key: const Key('mark-attending'),
@@ -438,4 +478,183 @@ class _TimelineItem extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// Seguimiento del apoyo: lo que hizo el adulto, cómo dijo sentirse el
+/// alumno (por separado) y el historial de cambios. No es una evaluación
+/// clínica.
+class _SupportFollowUp extends ConsumerWidget {
+  const _SupportFollowUp({required this.request, required this.onRegister});
+
+  final CommunicationRequest request;
+  final VoidCallback? onRegister;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final r = request;
+    final events =
+        ref.watch(requestEventsProvider((r.childId, r.id))).value ??
+        const <RequestEvent>[];
+    final feedback = r.childFeedback;
+    return Card(
+      key: const Key('support-follow-up'),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Seguimiento del apoyo',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            _InfoRow(
+              'Apoyo brindado',
+              r.supportProvided == null
+                  ? 'Sin registrar'
+                  : '${r.supportProvided} · ${r.supportByName ?? ''}'
+                        '${r.supportAt == null ? '' : ' · ${formatDateTime(r.supportAt!)}'}',
+            ),
+            Row(
+              children: [
+                if (feedback != null && feedback != SupportFeedback.none) ...[
+                  SymbolImage(feedback.symbol, size: 32),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: _InfoRow(
+                    'El alumno dice',
+                    feedback?.label ?? 'Aún sin valoración',
+                  ),
+                ),
+              ],
+            ),
+            if (onRegister != null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  key: const Key('register-support'),
+                  onPressed: onRegister,
+                  icon: const Icon(Icons.edit_note_rounded),
+                  label: Text(
+                    r.supportProvided == null
+                        ? 'Registrar apoyo brindado'
+                        : 'Editar apoyo brindado',
+                  ),
+                ),
+              ),
+            if (events.isNotEmpty) ...[
+              const Divider(),
+              const Text(
+                'Historial',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+              for (final e in events)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    '${formatDateTime(e.at)} · ${e.label} · ${e.byName}',
+                    style: const TextStyle(fontSize: 13),
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "En otras ocasiones le ha servido": apoyos registrados antes para lo
+/// mismo (o la misma categoría), con lo que el alumno dijo después. Ayuda a
+/// decidir; no es una recomendación clínica.
+class _PastSupportSuggestions extends ConsumerWidget {
+  const _PastSupportSuggestions({required this.request, required this.onUse});
+
+  final CommunicationRequest request;
+  final ValueChanged<String>? onUse;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final history =
+        ref.watch(childRequestsProvider(request.childId)).value ??
+        const <CommunicationRequest>[];
+    final suggestions = SupportSuggestions.forRequest(request, history);
+    if (suggestions.isEmpty) return const SizedBox.shrink();
+    return Card(
+      key: const Key('past-support-suggestions'),
+      color: AppColors.primary.withValues(alpha: 0.06),
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.tips_and_updates_outlined, color: AppColors.primary),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'En otras ocasiones le ha servido',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Apoyos que se registraron antes cuando comunicó algo parecido, '
+              'y cómo dijo sentirse después.',
+              style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
+            ),
+            for (final s in suggestions)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2, right: 8),
+                      child: s.better > 0
+                          ? SymbolImage(SupportFeedback.better.symbol, size: 28)
+                          : const Icon(
+                              Icons.history_rounded,
+                              size: 28,
+                              color: AppColors.inkSoft,
+                            ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            s.text,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          Text(
+                            [
+                              if (!s.sameMessage) 'En una situación parecida',
+                              s.summary,
+                              'última vez ${formatDate(s.lastUsed)}',
+                            ].join(' · '),
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (onUse != null)
+                      TextButton(
+                        key: Key('use-suggestion-${suggestions.indexOf(s)}'),
+                        onPressed: () => onUse!(s.text),
+                        child: const Text('Usar'),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
 }

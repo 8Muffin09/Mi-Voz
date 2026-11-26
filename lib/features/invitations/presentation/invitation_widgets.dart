@@ -196,6 +196,7 @@ Future<void> showInvitationShare(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          const LocalOnlyInvitationsNotice(),
           Container(
             key: const Key('invitation-qr'),
             color: Colors.white,
@@ -291,6 +292,7 @@ class InvitationsSection extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const LocalOnlyInvitationsNotice(),
         if (pending.isNotEmpty) ...[
           SectionHeader(
             'Solicitudes de incorporación',
@@ -472,6 +474,43 @@ class PendingApprovalsCard extends ConsumerWidget {
         ),
         JoinRequestsList(requests: pending),
       ],
+    );
+  }
+}
+
+/// Sin la nube configurada, las invitaciones se guardan solo en este
+/// teléfono: un código generado aquí no existe en otro dispositivo (por eso
+/// allí aparece "no encontramos ese código"). Se avisa en lugar de dejar que
+/// parezca que se puede compartir.
+class LocalOnlyInvitationsNotice extends ConsumerWidget {
+  const LocalOnlyInvitationsNotice({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (!ref.watch(isDemoModeProvider)) return const SizedBox.shrink();
+    return Card(
+      key: const Key('local-invitations-notice'),
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      color: AppColors.warning.withValues(alpha: 0.12),
+      child: const Padding(
+        padding: EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.phone_android_rounded, color: AppColors.warning),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Esta versión guarda los datos solo en este dispositivo: los '
+                'códigos funcionan únicamente aquí, con otra cuenta de este '
+                'mismo teléfono. Para vincular otro teléfono hace falta la '
+                'versión conectada a internet.',
+                style: TextStyle(fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

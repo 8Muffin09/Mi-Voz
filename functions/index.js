@@ -13,6 +13,8 @@
  *   cierra sus clases y elimina sus vínculos y datos (ver account.js).
  * - cleanupOnChildDeleted: al eliminar un perfil, borra sus subcolecciones,
  *   sus invitaciones y sus fotos en Storage.
+ * - notifyChildOnStatusChange: avisa al teléfono del niño cuando su adulto
+ *   vio su mensaje, va en camino o lo resolvió (ver child_status.js).
  * - importLocalHistory: transfiere el historial de un dispositivo al perfil
  *   en la nube (solo el administrador; ver migration.js).
  * - createInvitation, previewInvitation, redeemInvitation, revokeInvitation,
@@ -36,8 +38,11 @@ Object.assign(exports, require('./invitations'));
 // Limpieza al eliminar una cuenta.
 Object.assign(exports, require('./account'));
 Object.assign(exports, require('./migration'));
+Object.assign(exports, require('./child_status'));
 
-const db = getFirestore();
+const { DATABASE } = require('./database');
+
+const db = getFirestore(DATABASE);
 
 const INVALID_TOKEN_CODES = new Set([
   'messaging/registration-token-not-registered',
@@ -74,7 +79,7 @@ async function namesFor(childId, uids) {
 }
 
 exports.notifyOnRequestCreated = onDocumentCreated(
-  'children/{childId}/communication_requests/{requestId}',
+  { document: 'children/{childId}/communication_requests/{requestId}', database: DATABASE },
   async (event) => {
     const snap = event.data;
     if (!snap) return;
@@ -222,7 +227,7 @@ exports.notifyOnRequestCreated = onDocumentCreated(
 
 // Aviso a quien debe aprobar una solicitud para unirse a una familia o
 // vincular a un niño con una clase (la crea redeemInvitation).
-exports.notifyOnJoinRequest = onDocumentCreated('join_requests/{requestId}', async (event) => {
+exports.notifyOnJoinRequest = onDocumentCreated({ document: 'join_requests/{requestId}', database: DATABASE }, async (event) => {
   const snap = event.data;
   if (!snap) return;
   const request = snap.data();
@@ -253,7 +258,7 @@ exports.notifyOnJoinRequest = onDocumentCreated('join_requests/{requestId}', asy
   await Promise.allSettled(cleanup);
 });
 
-exports.cleanupOnChildDeleted = onDocumentDeleted('children/{childId}', async (event) => {
+exports.cleanupOnChildDeleted = onDocumentDeleted({ document: 'children/{childId}', database: DATABASE }, async (event) => {
   const { childId } = event.params;
   const childRef = db.doc(`children/${childId}`);
   await db.recursiveDelete(childRef);

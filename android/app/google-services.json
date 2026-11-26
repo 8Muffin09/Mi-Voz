@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "524914923521",
+    "project_id": "mi-voz-fc416",
+    "storage_bucket": "mi-voz-fc416.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:524914923521:android:1b35902789a5db48948800",
+        "android_client_info": {
+          "package_name": "com.mivoz.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCgDGRLoYxGw2Kk1GJKbBYR8zDSFm3C2ow"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

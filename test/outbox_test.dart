@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mi_voz/app/providers.dart';
 import 'package:mi_voz/core/demo/demo_database.dart';
 import 'package:mi_voz/core/demo/demo_seed.dart';
+import 'package:mi_voz/core/services/local_store.dart';
+import 'package:mi_voz/core/utils/app_exception.dart';
 import 'package:mi_voz/features/communication/application/communication_service.dart';
 import 'package:mi_voz/features/communication/application/outbox.dart';
 import 'package:mi_voz/features/communication/application/requests_providers.dart';
@@ -88,9 +90,87 @@ void main() {
     // "Reinicio": nuevo contenedor con las mismas preferencias.
     final restarted = ProviderContainer(overrides: testOverrides(prefs));
     addTearDown(restarted.dispose);
+    restarted.listen(currentUserProvider, (_, _) {});
+    await restarted.read(authStateProvider.future);
     expect(restarted.read(outboxProvider).single.id, request.id);
     await restarted.read(demoDatabaseProvider).setSimulateOffline(false);
     await restarted.read(outboxProvider.notifier).sync();
     expect(restarted.read(outboxProvider), isEmpty);
   });
+
+  test(
+    'la cola de una cuenta no se envía ni se muestra con otra sesión',
+    () async {
+      final container = await demoContainer();
+      final db = container.read(demoDatabaseProvider);
+      await db.setSession(DemoSeed.maria.uid);
+      await db.setSimulateOffline(true);
+      container.listen(currentUserProvider, (_, _) {});
+      await container.read(authStateProvider.future);
+      final child = (await container
+          .read(childrenRepositoryProvider)
+          .watchChild('demo-juan')
+          .first)!;
+      final request = CommunicationService.buildRequest(
+        child: child,
+        draft: const PhraseDraft.fixed(text: 'Necesito agua', emoji: '💧'),
+        senderUid: DemoSeed.maria.uid,
+      );
+      await container.read(outboxProvider.notifier).submit(request);
+      expect(container.read(outboxProvider), hasLength(1));
+
+      // Otra cuenta en el mismo teléfono: no ve la solicitud de María.
+      await db.setSession(DemoSeed.ana.uid);
+      container.invalidate(authStateProvider);
+      await container.read(authStateProvider.future);
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(currentUserProvider)?.uid, DemoSeed.ana.uid);
+      expect(container.read(outboxProvider), isEmpty);
+      // Y no puede encolar algo a nombre de María.
+      expect(
+        () => container.read(outboxProvider.notifier).submit(request),
+        throwsA(isA<PermissionDeniedException>()),
+      );
+    },
+  );
+
+  test(
+    'cola de versiones anteriores: cada solicitud pasa a su cuenta',
+    () async {
+      final legacy = '${LocalStore.keyOutbox}_demo';
+      final container = await demoContainer();
+      final db = container.read(demoDatabaseProvider);
+      final store = container.read(localStoreProvider);
+      await store.setJsonList(legacy, [
+        {
+          'id': 'r-maria',
+          'childId': 'demo-juan',
+          'message': 'Hola',
+          'createdByUid': DemoSeed.maria.uid,
+          'createdAt': DateTime.now().toIso8601String(),
+          'status': 'new',
+          'priority': 'normal',
+        },
+        {
+          'id': 'r-ana',
+          'childId': 'demo-juan',
+          'message': 'Adiós',
+          'createdByUid': DemoSeed.ana.uid,
+          'createdAt': DateTime.now().toIso8601String(),
+          'status': 'new',
+          'priority': 'normal',
+        },
+      ]);
+      await db.setSimulateOffline(true);
+      await db.setSession(DemoSeed.maria.uid);
+      container.listen(currentUserProvider, (_, _) {});
+      await container.read(authStateProvider.future);
+      expect(
+        [for (final r in container.read(outboxProvider)) r.id],
+        ['r-maria'],
+      );
+      // La de Ana sigue esperando a Ana.
+      expect([for (final m in store.getJsonList(legacy)) m['id']], ['r-ana']);
+    },
+  );
 }

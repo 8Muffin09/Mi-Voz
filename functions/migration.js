@@ -15,6 +15,7 @@
  */
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
+const { DATABASE } = require('./database');
 
 const MAX_PER_CALL = 200;
 const STATUSES = ['new', 'seen', 'attending', 'resolved'];
@@ -43,7 +44,7 @@ exports.importLocalHistory = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'Demasiadas solicitudes en un envío.');
   }
 
-  const db = getFirestore();
+  const db = getFirestore(DATABASE);
   const childRef = db.doc(`children/${childId}`);
   const child = await childRef.get();
   if (!child.exists || child.data().ownerUid !== uid) {

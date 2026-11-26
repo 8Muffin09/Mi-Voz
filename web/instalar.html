@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Instalar Mi Voz</title>
+  <meta name="description" content="Descarga Mi Voz para Android o ábrela en el navegador.">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <style>
+    :root {
+      --fondo: #eaf4fa; --tarjeta: #fffaf3; --tinta: #203149;
+      --suave: #51627a; --primario: #315e93; --foco: #753a85; --aviso: #fff1d6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 32px 16px; background: var(--fondo);
+      color: var(--tinta); font: 1.05rem/1.6 system-ui, sans-serif;
+    }
+    main {
+      max-width: 620px; margin: 0 auto; padding: clamp(20px, 5vw, 42px);
+      background: var(--tarjeta); border-radius: 24px;
+    }
+    header { display: flex; align-items: center; gap: 16px; }
+    header img { width: 72px; height: 72px; border-radius: 18px; }
+    h1, h2 { line-height: 1.2; margin: 0.4em 0; }
+    .version { color: var(--suave); font-size: 0.95rem; margin: 0; }
+    .acciones { display: flex; flex-direction: column; gap: 12px; margin: 24px 0; }
+    .boton {
+      display: block; padding: 14px 20px; border: 2px solid var(--primario);
+      border-radius: 14px; color: var(--primario); font-weight: 700;
+      text-decoration: none; text-align: center;
+    }
+    .boton small { display: block; font-weight: 400; font-size: 0.85rem; }
+    .principal { background: var(--primario); color: white; }
+    a:focus-visible { outline: 3px solid var(--foco); outline-offset: 4px; }
+    .aviso { background: var(--aviso); border-radius: 14px; padding: 12px 16px; }
+    li { margin-bottom: 10px; }
+    details { margin-top: 16px; }
+    code { font-size: 0.8rem; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <img src="icons/Icon-192.png" alt="">
+      <div>
+        <h1>Instalar Mi Voz</h1>
+        <p class="version">Versión 1.0.1 · Android 7.0 o posterior</p>
+      </div>
+    </header>
+
+    <p>Comunícate con pictogramas y voz. Si ya tienes cuenta, inicia sesión
+       para recuperar tus perfiles en cualquier dispositivo.</p>
+
+    <div class="acciones">
+      <!-- Los enlaces "latest" siempre llevan a la última versión publicada en
+           GitHub, siempre que cada versión incluya archivos con estos nombres. -->
+      <a class="boton principal"
+         href="https://github.com/8Muffin09/Mi-Voz/releases/latest/download/mi-voz-arm64.apk">
+        Descargar para Android
+        <small>Recomendado para teléfonos actuales · 35 MB</small>
+      </a>
+      <a class="boton"
+         href="https://github.com/8Muffin09/Mi-Voz/releases/latest/download/mi-voz.apk">
+        Versión para cualquier Android
+        <small>Si la anterior no se instala · 87 MB</small>
+      </a>
+      <a class="boton" href="/">
+        Abrir Mi Voz en el navegador
+        <small>iPhone, Windows o Mac</small>
+      </a>
+    </div>
+
+    <h2>Instalar en Android</h2>
+    <ol>
+      <li>Toca <strong>Descargar para Android</strong> y espera a que termine.</li>
+      <li>Abre el archivo descargado (en la notificación o en
+          <strong>Archivos → Descargas</strong>).</li>
+      <li>Si Android lo pide, permite <strong>Instalar apps de origen
+          desconocido</strong> para tu navegador o administrador de archivos.</li>
+      <li>Toca <strong>Instalar</strong>. Si ya tenías Mi Voz, se actualiza
+          sin perder tus datos.</li>
+    </ol>
+    <p class="aviso">Google Play Protect puede mostrar un aviso porque la app
+       no viene de Play Store. Toca <strong>Más detalles → Instalar de todas
+       formas</strong>. Si dice <em>"La app no se instaló"</em>, prueba la
+       versión para cualquier Android o desinstala primero la versión anterior.</p>
+
+    <h2>Otros dispositivos</h2>
+    <ul>
+      <li><strong>iPhone:</strong> abre Mi Voz en Safari, toca
+          <strong>Compartir</strong> y luego <strong>Agregar a Inicio</strong>.</li>
+      <li><strong>Windows:</strong> abre Mi Voz en Edge y, en el menú del
+          navegador, elige instalar el sitio como aplicación.</li>
+      <li><strong>Mac (macOS Sonoma 14 o posterior):</strong> abre Mi Voz en
+          Safari y elige <strong>Archivo → Agregar al Dock</strong>.</li>
+    </ul>
+
+    <details>
+      <summary>Comprobar el archivo (opcional)</summary>
+      <p>Las huellas SHA-256 de cada versión están en el archivo
+         <a href="https://github.com/8Muffin09/Mi-Voz/releases/latest">SHA256SUMS.txt
+         de la versión en GitHub</a>.</p>
+    </details>
+  </main>
+</body>
+</html>

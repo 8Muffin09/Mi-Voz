@@ -21,6 +21,21 @@ enum RequestStatus {
   bool get isOpen => this != RequestStatus.resolved;
 }
 
+/// Cómo dice sentirse el alumno después del apoyo. Es su valoración, no la
+/// del adulto: "Resuelta" no significa "Mejor". Nunca es obligatoria.
+enum SupportFeedback {
+  better('Me siento mejor', 'me_siento_feliz'),
+  same('Me siento igual', 'me_siento_tranquilo'),
+  worse('Me siento peor', 'me_siento_triste'),
+  none('Sin respuesta / No evaluado', 'necesito_hablar');
+
+  const SupportFeedback(this.label, this.symbol);
+  final String label;
+
+  /// Pictograma del catálogo (`SymbolCatalog`).
+  final String symbol;
+}
+
 enum RequestPriority {
   normal('Normal'),
   high('Alta');
@@ -96,6 +111,12 @@ class CommunicationRequest {
     this.attendingAt,
     this.resolvedAt,
     this.note,
+    this.supportProvided,
+    this.supportByUid,
+    this.supportByName,
+    this.supportAt,
+    this.childFeedback,
+    this.childFeedbackAt,
     this.delivery = DeliveryStatus.pendingSync,
     this.deliveredAt,
     this.notification = NotificationStatus.pending,
@@ -131,6 +152,16 @@ class CommunicationRequest {
   final DateTime? resolvedAt;
   final String? note;
 
+  /// Apoyo que brindó el adulto (su observación) y quién lo registró.
+  final String? supportProvided;
+  final String? supportByUid;
+  final String? supportByName;
+  final DateTime? supportAt;
+
+  /// Valoración del alumno (`null` = todavía no se le preguntó).
+  final SupportFeedback? childFeedback;
+  final DateTime? childFeedbackAt;
+
   // Estos campos no se guardan desde el cliente: los calcula la app
   // (entrega) o el backend (notificación).
   final DeliveryStatus delivery;
@@ -162,6 +193,12 @@ class CommunicationRequest {
     DateTime? attendingAt,
     DateTime? resolvedAt,
     String? note,
+    String? supportProvided,
+    String? supportByUid,
+    String? supportByName,
+    DateTime? supportAt,
+    SupportFeedback? childFeedback,
+    DateTime? childFeedbackAt,
     DeliveryStatus? delivery,
     DateTime? deliveredAt,
     NotificationStatus? notification,
@@ -192,6 +229,12 @@ class CommunicationRequest {
     attendingAt: attendingAt ?? this.attendingAt,
     resolvedAt: resolvedAt ?? this.resolvedAt,
     note: note ?? this.note,
+    supportProvided: supportProvided ?? this.supportProvided,
+    supportByUid: supportByUid ?? this.supportByUid,
+    supportByName: supportByName ?? this.supportByName,
+    supportAt: supportAt ?? this.supportAt,
+    childFeedback: childFeedback ?? this.childFeedback,
+    childFeedbackAt: childFeedbackAt ?? this.childFeedbackAt,
     delivery: delivery ?? this.delivery,
     deliveredAt: deliveredAt ?? this.deliveredAt,
     notification: notification ?? this.notification,
@@ -231,6 +274,12 @@ class CommunicationRequest {
     'attendingAt': attendingAt,
     'resolvedAt': resolvedAt,
     'note': note,
+    'supportProvided': supportProvided,
+    'supportByUid': supportByUid,
+    'supportByName': supportByName,
+    'supportAt': supportAt,
+    'childFeedback': childFeedback?.name,
+    'childFeedbackAt': childFeedbackAt,
     'delivery': delivery.name,
     'deliveredAt': deliveredAt,
     'notification': {
@@ -274,6 +323,18 @@ class CommunicationRequest {
       attendingAt: parseDate(map['attendingAt']),
       resolvedAt: parseDate(map['resolvedAt']),
       note: readString(map['note']),
+      supportProvided: readString(map['supportProvided']),
+      supportByUid: readString(map['supportByUid']),
+      supportByName: readString(map['supportByName']),
+      supportAt: parseDate(map['supportAt']),
+      childFeedback: map['childFeedback'] == null
+          ? null
+          : enumByName(
+              SupportFeedback.values,
+              map['childFeedback'],
+              SupportFeedback.none,
+            ),
+      childFeedbackAt: parseDate(map['childFeedbackAt']),
       delivery:
           delivery ??
           enumByName(
@@ -299,4 +360,47 @@ class CommunicationRequest {
             ),
     );
   }
+}
+
+/// Un cambio en el historial de la solicitud (inmutable en el servidor).
+class RequestEvent {
+  const RequestEvent({
+    required this.type,
+    required this.byUid,
+    required this.byName,
+    required this.at,
+    this.detail,
+  });
+
+  /// `seen`, `attending`, `resolved`, `support` o `feedback`.
+  final String type;
+  final String byUid;
+  final String byName;
+  final DateTime at;
+  final String? detail;
+
+  String get label => switch (type) {
+    'seen' => 'Vista',
+    'attending' => 'En atención',
+    'resolved' => 'Resuelta',
+    'support' => 'Apoyo registrado',
+    'feedback' => 'Valoración del alumno',
+    _ => type,
+  };
+
+  Map<String, dynamic> toMap() => {
+    'type': type,
+    'byUid': byUid,
+    'byName': byName,
+    'at': at,
+    if (detail != null) 'detail': detail,
+  };
+
+  factory RequestEvent.fromMap(Map<String, dynamic> map) => RequestEvent(
+    type: readString(map['type']) ?? '',
+    byUid: readString(map['byUid']) ?? '',
+    byName: readString(map['byName']) ?? '',
+    at: parseDate(map['at']) ?? DateTime.now(),
+    detail: readString(map['detail']),
+  );
 }

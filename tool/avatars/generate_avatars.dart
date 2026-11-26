@@ -25,9 +25,53 @@ void main() {
   stdout.writeln('${all.length} avatares generados en $_out.');
 }
 
-String _svg(String body) =>
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
-    '$body</svg>\n';
+/// Volumen tipo plastilina: cada color de relleno (y de contorno) pasa a un
+/// degradado radial propio, con luz arriba a la izquierda y sombra abajo a
+/// la derecha, calculado sobre la caja de cada forma. Solo degradados (sin
+/// filtros de desenfoque): flutter_svg los dibuja igual en Android, iOS y
+/// Windows. Los ojos, las mejillas y los brillos blancos quedan planos para
+/// que la expresión se lea nítida.
+String _svg(String body) {
+  final defs = <String, String>{};
+  // Por elemento: se sombrea el relleno; el contorno solo si es del mismo
+  // color que el relleno (orejas puntiagudas, estrella). Las líneas sueltas
+  // (rayos, bigotes, venas) quedan de color sólido: un degradado sobre una
+  // línea delgada se ve deslavado.
+  final shaded = body.replaceAllMapped(RegExp(r'<[a-zA-Z][^>]*>'), (tag) {
+    final t = tag[0]!;
+    final fill = RegExp(r'fill="(#[0-9A-Fa-f]{6})"').firstMatch(t)?[1];
+    if (fill == null || _flat.contains(fill.toUpperCase())) return t;
+    final hex = fill.toUpperCase();
+    final id = 's${hex.substring(1)}';
+    defs[id] ??=
+        '<radialGradient id="$id" cx="0.36" cy="0.3" r="0.78">'
+        '<stop offset="0" stop-color="${_mix(hex, '#FFFFFF', 0.32)}"/>'
+        '<stop offset="0.55" stop-color="$hex"/>'
+        '<stop offset="1" stop-color="${_mix(hex, '#000000', 0.2)}"/>'
+        '</radialGradient>';
+    return t
+        .replaceAll('fill="$fill"', 'fill="url(#$id)"')
+        .replaceAll('stroke="$fill"', 'stroke="url(#$id)"');
+  });
+  return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
+      '<defs>${defs.values.join()}</defs>$shaded</svg>\n';
+}
+
+/// Colores que no se sombrean (ojos, mejillas, brillos).
+const _flat = {_ink, _cheek, '#FFFFFF', '#000000'};
+
+String _mix(String a, String b, double t) {
+  int ch(String h, int i) =>
+      int.parse(h.substring(1 + i * 2, 3 + i * 2), radix: 16);
+  final out = [
+    for (var i = 0; i < 3; i++)
+      (ch(a, i) + (ch(b, i) - ch(a, i)) * t)
+          .round()
+          .toRadixString(16)
+          .padLeft(2, '0'),
+  ];
+  return '#${out.join().toUpperCase()}';
+}
 
 // ---------------------------------------------------------------------------
 // Piezas comunes

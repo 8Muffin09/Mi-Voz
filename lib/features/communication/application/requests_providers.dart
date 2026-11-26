@@ -100,3 +100,10 @@ final trackedRequestProvider =
           .watch(requestsRepositoryProvider)
           .watchRequest(key.childId, key.requestId);
     });
+
+/// Historial de cambios de una solicitud (solo adultos autorizados).
+final requestEventsProvider =
+    StreamProvider.family<List<RequestEvent>, (String, String)>((ref, ids) {
+      ref.watch(sessionUidProvider);
+      return ref.watch(requestsRepositoryProvider).watchEvents(ids.$1, ids.$2);
+    });

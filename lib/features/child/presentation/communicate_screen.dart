@@ -10,6 +10,8 @@ import '../../../core/theme/child_palette.dart';
 import '../../../core/widgets/visuals.dart';
 import '../../../core/widgets/state_views.dart';
 import '../../../models/communication_request.dart';
+import '../../../core/widgets/dialogs.dart';
+import '../../communication/application/communication_service.dart';
 import '../../communication/application/requests_providers.dart';
 import '../application/active_child.dart';
 import '../application/child_mode.dart';
@@ -87,6 +89,9 @@ class _CommunicateScreenState extends ConsumerState<CommunicateScreen> {
               ),
               const SizedBox(height: 24),
               ..._steps(request, palette),
+              if (request.status == RequestStatus.resolved &&
+                  request.childFeedback == null)
+                ChildFeedbackCard(request: request, palette: palette),
             ],
           );
         },
@@ -275,4 +280,127 @@ class _StatusRow extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// "¿Cómo te sientes ahora?": valoración opcional del alumno después del
+/// apoyo. Tres pictogramas grandes y "Prefiero no responder"; se puede salir
+/// sin contestar (no bloquea nada). Se guarda separada de lo que anotó el
+/// adulto.
+class ChildFeedbackCard extends ConsumerStatefulWidget {
+  const ChildFeedbackCard({
+    super.key,
+    required this.request,
+    required this.palette,
+  });
+
+  final CommunicationRequest request;
+  final ChildPalette palette;
+
+  @override
+  ConsumerState<ChildFeedbackCard> createState() => _ChildFeedbackCardState();
+}
+
+class _ChildFeedbackCardState extends ConsumerState<ChildFeedbackCard> {
+  bool _saving = false;
+
+  Future<void> _choose(SupportFeedback feedback) async {
+    setState(() => _saving = true);
+    ref.read(childFeedbackProvider).select(feedback.label);
+    await runGuarded(
+      context,
+      () => ref
+          .read(communicationServiceProvider)
+          .setChildFeedback(widget.request, feedback),
+    );
+    if (mounted) setState(() => _saving = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = widget.palette;
+    return Container(
+      key: const Key('child-feedback'),
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(
+          color: palette.borderColor,
+          width: palette.borderWidth,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              '¿Cómo te sientes ahora?',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: AppTheme.fontFamily,
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                color: palette.ink,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (final f in const [
+                SupportFeedback.better,
+                SupportFeedback.same,
+                SupportFeedback.worse,
+              ])
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Semantics(
+                      button: true,
+                      label: f.label,
+                      excludeSemantics: true,
+                      child: Material(
+                        color: palette.background,
+                        borderRadius: BorderRadius.circular(AppTheme.radius),
+                        child: InkWell(
+                          key: Key('feedback-${f.name}'),
+                          borderRadius: BorderRadius.circular(AppTheme.radius),
+                          onTap: _saving ? null : () => _choose(f),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Column(
+                              children: [
+                                SymbolFrame(f.symbol, size: 72),
+                                const SizedBox(height: 6),
+                                Text(
+                                  f.label,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 16,
+                                    color: palette.ink,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            key: const Key('feedback-none'),
+            onPressed: _saving ? null : () => _choose(SupportFeedback.none),
+            child: const Text('Prefiero no responder'),
+          ),
+        ],
+      ),
+    );
+  }
 }
