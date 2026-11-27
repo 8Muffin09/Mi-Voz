@@ -37,6 +37,24 @@ service cloud.firestore {
       return /databases/$(database)/documents/families/$(familyId);
     }
 
+    function invitationPath(code) {
+      return /databases/$(database)/documents/group_invitations/$(code);
+    }
+
+    function joinRequestPath(requestId) {
+      return /databases/$(database)/documents/join_requests/$(requestId);
+    }
+
+    // Solicitud de unión que el responsable aprueba en este mismo lote.
+    function approvedNow(requestId, type, targetId) {
+      let after = getAfter(joinRequestPath(requestId)).data;
+      return after.status == 'approved'
+        && get(joinRequestPath(requestId)).data.status == 'pending'
+        && after.type == type
+        && after.targetId == targetId
+        && after.approverUid == uid();
+    }
+
     function classPath(classId) {
       return /databases/$(database)/documents/classes/$(classId);
     }
@@ -263,8 +281,35 @@ service cloud.firestore {
                       .data.teacherUids.toSet())
               && responsibleIsMember())
           ))
-        // Nadie se agrega a sí mismo: las incorporaciones solo ocurren en
-        // las Cloud Functions tras validar una invitación.
+        ||
+        // Administrador de la familia: da acceso a un adulto que acaba de
+        // incorporarse a la familia (lote de la aprobación). Solo agrega.
+        (resource.data.get('familyId', null) != null
+          && isFamilyOwner(resource.data.familyId)
+          && changedKeys().hasOnly(['memberUids'])
+          && request.resource.data.memberUids.hasAll(resource.data.memberUids)
+          && request.resource.data.memberUids.toSet()
+              .difference(resource.data.memberUids.toSet())
+              .hasOnly(getAfter(familyPath(resource.data.familyId))
+                .data.adultUids.toSet()))
+        ||
+        // Docente que aprueba la solicitud de la familia para su clase: se
+        // agrega solo a sí misma y solo esa clase.
+        (!(uid() in resource.data.memberUids)
+          && changedKeys().hasOnly([
+            'classIds', 'memberUids', 'lastClassChange', 'lastJoinRequest'
+          ])
+          && isClassOwner(request.resource.data.lastClassChange)
+          && approvedNow(request.resource.data.lastJoinRequest, 'classroom',
+              request.resource.data.lastClassChange)
+          && getAfter(joinRequestPath(request.resource.data.lastJoinRequest))
+              .data.childId == childId
+          && request.resource.data.classIds.toSet()
+              == resource.data.get('classIds', []).toSet()
+                  .union([request.resource.data.lastClassChange].toSet())
+          && request.resource.data.memberUids.toSet()
+              == resource.data.memberUids.toSet().union([uid()].toSet()))
+        // Nadie más se agrega a sí mismo a un perfil.
       );
 
       allow delete: if signedIn() && resource.data.ownerUid == uid();
@@ -282,6 +327,20 @@ service cloud.firestore {
               && request.resource.data.permission == 'owner'
               && getAfter(childPath(childId)).data.ownerUid == uid())
 
+            ||
+            // Vínculo de quien obtiene acceso en este mismo lote (aprobación
+            // de una solicitud de unión): nunca de administrador.
+            (request.resource.data.permission == 'caregiver'
+              && !(adultUid in get(childPath(childId)).data.memberUids)
+              && adultUid in getAfter(childPath(childId)).data.memberUids
+              && (
+                (adultUid == uid()
+                  && request.resource.data.role == 'docente'
+                  && request.resource.data.source == 'classroom')
+                ||
+                (request.resource.data.source == 'family'
+                  && isFamilyOwner(get(childPath(childId)).data.get('familyId', null)))
+              ))
             ||
             // Al crear un perfil en una familia: vínculo autorizado (nunca
             // administrador) para cada adulto de esa familia.
@@ -452,6 +511,19 @@ service cloud.firestore {
           && changedKeys().hasOnly(['adultUids', 'adultNames', 'adultRoles'])
           && request.resource.data.adultUids.toSet()
               == resource.data.adultUids.toSet().difference([uid()].toSet()))
+        ||
+        // El responsable aprueba una solicitud de unión: se agrega
+        // exactamente a quien la envió, en el mismo lote que la aprobación.
+        (resource.data.ownerUid == uid()
+          && changedKeys().hasOnly([
+            'adultUids', 'adultNames', 'adultRoles', 'lastJoinRequest'
+          ])
+          && approvedNow(request.resource.data.lastJoinRequest, 'family', familyId)
+          && request.resource.data.adultUids.toSet()
+              == resource.data.adultUids.toSet().union([
+                getAfter(joinRequestPath(request.resource.data.lastJoinRequest))
+                  .data.requesterUid
+              ].toSet()))
       );
 
       allow delete: if signedIn() && resource.data.ownerUid == uid();
@@ -498,22 +570,152 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------ group_invitations
-    // Invitaciones a familias y clases. Las crean, revocan y canjean las
-    // Cloud Functions (que validan permisos, caducidad, usos e intentos).
-    // El cliente solo lee las de los grupos que administra.
+    // Invitaciones a familias y clases, sin Cloud Functions (plan Spark).
+    // Las reglas hacen de servidor: solo quien administra el grupo (correo
+    // verificado) las crea o revoca; canjear suma exactamente un uso, sin
+    // pasar del límite ni de la vigencia, y en el mismo lote crea una sola
+    // solicitud pendiente. Toda incorporación la aprueba el responsable.
     match /group_invitations/{code} {
-      allow read: if signedIn()
-        && (resource.data.ownerUid == uid() || resource.data.createdBy == uid());
-      allow write: if false;
+      function activeInvitation(d) {
+        return d.revoked == false
+          && d.uses < d.maxUses
+          && request.time < d.createdAt + duration.value(d.validityHours, 'h');
+      }
+
+      function ownsTarget(d) {
+        return (d.type == 'family'
+            && get(familyPath(d.targetId)).data.ownerUid == uid()
+            && d.targetName == get(familyPath(d.targetId)).data.name
+            && d.role in ['madre', 'padre', 'tutor', 'cuidador'])
+          || (d.type == 'classroom'
+            && get(classPath(d.targetId)).data.ownerUid == uid()
+            && get(classPath(d.targetId)).data.archived == false
+            && d.targetName == get(classPath(d.targetId)).data.name
+            && d.role == null);
+      }
+
+      // Consultar por el código exacto (antes de unirse). Un código que no
+      // existe responde "no existe" sin revelar nada.
+      allow get: if verified()
+        || (signedIn() && resource.data.ownerUid == uid());
+      // Listar: solo las del propio grupo.
+      allow list: if signedIn() && resource.data.ownerUid == uid();
+
+      allow create: if verified()
+        && code.matches('^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$')
+        && request.resource.data.keys().hasOnly([
+          'code', 'type', 'targetId', 'targetName', 'ownerUid', 'createdBy',
+          'createdByName', 'createdAt', 'validityHours', 'maxUses', 'uses',
+          'revoked', 'requiresApproval', 'role', 'lastRequestId'
+        ])
+        && request.resource.data.code == code
+        && request.resource.data.ownerUid == uid()
+        && request.resource.data.createdBy == uid()
+        && request.resource.data.createdByName is string
+        && request.resource.data.createdByName.size() <= 100
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.validityHours in [48, 168]
+        && request.resource.data.maxUses in [1, 5, 30]
+        && request.resource.data.uses == 0
+        && request.resource.data.revoked == false
+        && request.resource.data.requiresApproval == true
+        && request.resource.data.lastRequestId == null
+        && ownsTarget(request.resource.data);
+
+      allow update: if signedIn() && (
+        // Revocar.
+        ((resource.data.ownerUid == uid() || resource.data.createdBy == uid())
+          && changedKeys().hasOnly(['revoked'])
+          && request.resource.data.revoked == true)
+        ||
+        // Canjear: un uso más, ligado a la solicitud del mismo lote.
+        (verified()
+          && changedKeys().hasOnly(['uses', 'lastRequestId'])
+          && activeInvitation(resource.data)
+          && request.resource.data.uses == resource.data.uses + 1
+          && getAfter(joinRequestPath(request.resource.data.lastRequestId))
+              .data.code == code
+          && getAfter(joinRequestPath(request.resource.data.lastRequestId))
+              .data.requesterUid == uid())
+      );
+      allow delete: if false;
     }
 
     // ----------------------------------------------------- join_requests
-    // Solicitudes de incorporación: las ve quien la envió y quien la aprueba.
-    // Crearlas y resolverlas solo es posible mediante las Cloud Functions.
+    // Solicitudes de incorporación. El id es `uid_grupo_niño`: una sola por
+    // persona, grupo y niño. Las crea quien canjea (junto con el uso del
+    // código) y las resuelve solo quien administra el grupo.
     match /join_requests/{requestId} {
-      allow read: if signedIn()
+      function validNewRequest() {
+        let d = request.resource.data;
+        let before = get(invitationPath(d.code)).data;
+        let after = getAfter(invitationPath(d.code)).data;
+        return verified()
+          && d.keys().hasOnly([
+            'id', 'code', 'type', 'targetId', 'targetName', 'requesterUid',
+            'requesterName', 'approverUid', 'childId', 'childName', 'role',
+            'status', 'createdAt', 'reviewedAt'
+          ])
+          && d.id == requestId
+          && d.requesterUid == uid()
+          && d.requesterName is string && d.requesterName.size() <= 100
+          && d.status == 'pending'
+          && d.createdAt == request.time
+          && d.reviewedAt == null
+          && d.type == before.type
+          && d.targetId == before.targetId
+          && d.targetName == before.targetName
+          && d.approverUid == before.ownerUid
+          && d.role == before.role
+          && after.uses == before.uses + 1
+          && after.lastRequestId == requestId
+          && (
+            (d.type == 'family'
+              && d.childId == null && d.childName == null
+              && requestId == uid() + '_' + d.targetId + '_adulto')
+            ||
+            (d.type == 'classroom'
+              && d.childId is string
+              && requestId == uid() + '_' + d.targetId + '_' + d.childId
+              && canLinkChild(d.childId)
+              && d.childName == get(childPath(d.childId)).data.name
+              && !(d.targetId in get(childPath(d.childId)).data.get('classIds', [])))
+          );
+      }
+
+      // Solo un adulto de la familia del niño (o quien lo creó, si no tiene
+      // familia) puede pedir vincularlo con una clase.
+      function canLinkChild(childId) {
+        let c = get(childPath(childId)).data;
+        return (c.get('familyId', null) == null && c.ownerUid == uid())
+          || (c.get('familyId', null) != null && isFamilyAdult(c.familyId));
+      }
+
+      allow get: if signedIn() && (
+        (resource == null && requestId.matches(uid() + '_.*'))
+        || resource.data.requesterUid == uid()
+        || resource.data.approverUid == uid()
+      );
+      allow list: if signedIn()
         && (resource.data.requesterUid == uid() || resource.data.approverUid == uid());
-      allow write: if false;
+
+      allow create: if validNewRequest();
+
+      allow update: if signedIn() && (
+        // Volver a pedir tras un rechazo (con un nuevo uso del código).
+        (resource.data.requesterUid == uid()
+          && resource.data.status == 'rejected'
+          && validNewRequest())
+        ||
+        // Aprobar o rechazar: solo el responsable del grupo.
+        (verified()
+          && resource.data.approverUid == uid()
+          && resource.data.status == 'pending'
+          && changedKeys().hasOnly(['status', 'reviewedAt'])
+          && request.resource.data.status in ['approved', 'rejected']
+          && request.resource.data.reviewedAt == request.time)
+      );
+      allow delete: if false;
     }
 
     // ------------------------------------------------------- rate_limits

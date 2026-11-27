@@ -7,7 +7,7 @@
     "node": "22"
   },
   "scripts": {
-    "lint": "node --check index.js && node --check invitations.js && node --check account.js && node --check migration.js && node --check child_status.js && node --check database.js",
+    "lint": "node --check index.js && node --check account.js && node --check migration.js && node --check child_status.js && node --check database.js",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log"
   },

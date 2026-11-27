@@ -157,7 +157,7 @@ revocación). Requiere Java 11+ y Node 22:
 ```bash
 cd functions && npm install && cd ..
 cd firebase/tests && npm install && cd ../..
-firebase emulators:exec --project demo-mivoz --only auth,firestore,functions \
+firebase emulators:exec --project demo-mivoz --only auth,firestore \
   "node --test --test-concurrency=1 firebase/tests/flows.test.mjs"
 ```
 

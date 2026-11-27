@@ -1,5 +1,5 @@
-# Pruebas contra emuladores de Firebase (Auth, Firestore 'mivoz', Functions)
-# Fecha: 2026-11-25T07:54Z · firebase-tools 14.27.0 · Node v22.23.5
+# Pruebas contra emuladores de Firebase (Auth y Firestore 'mivoz'; sin Cloud Functions)
+# Fecha: 2026-11-27T00:07Z · firebase-tools 14.27.0 · Node v22.23.5
 # Proyecto: demo-mivoz (emulado, sin conexión a un proyecto real)
 ok 1 - en atención: "¡Ana va en camino!" con lo que comunicó
 ok 2 - vista y resuelta también avisan
@@ -10,16 +10,18 @@ ok 6 - 1b. Reintentar el registro no duplica la cuenta ni el perfil
 ok 7 - 2. Verificación de correo: se envía, "Ya confirmé" no basta y el servidor la exige
 ok 8 - 3 y 12. Otro dispositivo (o la app reabierta) recupera perfil y datos autorizados
 ok 9 - 4. Recuperación de contraseña por correo
-ok 10 - 5 y 6. Invitación creada en un teléfono y usada en otro (código escrito o leído del QR)
+ok 10 - 5 y 6. Invitación de familia: creada en un teléfono, canjeada en otro y aprobada
 ok 11 - 7. Código incorrecto, vencido, revocado o sin usos
-ok 12 - 7b. Intentos masivos: 5 códigos incorrectos bloquean la cuenta
+ok 12 - 7b. No se pueden listar ni fabricar invitaciones ni gastar usos sin solicitud
 ok 13 - 7c. Dos canjes simultáneos del último uso: solo uno entra
-ok 14 - 8. Con aprobación pendiente no hay acceso anticipado; doble toque no duplica
-ok 15 - 9, 10, 11 y 16. Solicitud del alumno: llega, se atiende, se valora y no se duplica
-ok 16 - 13. Cambio de cuenta en el mismo teléfono: sin acceso a los datos anteriores
-ok 17 - 14. Accesos y cambios no autorizados se rechazan
-ok 18 - 15. Revocar una vinculación retira el acceso
-# tests 18
-# pass 18
+ok 14 - 8. Aprobación pendiente sin acceso anticipado; nadie se aprueba a sí mismo
+ok 15 - 8b. Rechazar no da acceso; se puede volver a pedir con otro uso
+ok 16 - 9, 10, 11 y 16. Solicitud del alumno: llega, se atiende, se valora y no se duplica
+ok 17 - 13. Cambio de cuenta en el mismo teléfono: sin acceso a los datos anteriores
+ok 18 - 14. Accesos y cambios no autorizados se rechazan
+ok 19 - 15. Revocar una vinculación retira el acceso
+ok 20 - 8c. Un niño que ya está en otra clase de la docente se agrega a la nueva
+# tests 20
+# pass 20
 # fail 0
-# duration_ms 16193.9911
+# duration_ms 10877.9299
