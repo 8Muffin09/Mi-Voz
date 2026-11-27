@@ -17,18 +17,38 @@ ejecutado contra un proyecto real.
 | App Android y web registradas, `firebase_options.dart` y `google-services.json` | Configurado |
 | Firestore: base con nombre **`mivoz`** (no `(default)`) | Creada. La app, las funciones (`functions/database.js`) y `firebase.json` usan `mivoz` |
 | Hosting (`instalar.html` y versión web) | Publicado |
-| Reglas e índices de esta versión | **Pendiente de desplegar** |
-| Cloud Functions (invitaciones, avisos, limpieza) | **Nunca desplegadas**: la API de Cloud Functions está deshabilitada en el proyecto. Por eso "Generar código" no funciona. Requiere plan Blaze |
+| Reglas e índices de esta versión | **Pendiente de desplegar** (gratis, plan Spark) |
+| Invitaciones a clases y familias | **Sin Cloud Functions**: transacciones de la app validadas por las reglas. Funcionan en el plan gratuito en cuanto se despliegan las reglas |
+| Cloud Functions (avisos con la app cerrada, limpieza) | Opcionales. Requieren plan Blaze; nunca se desplegaron |
 
-Para dejarlo funcionando (desde la carpeta del proyecto, con tu sesión de
-`firebase login`):
+Para que funcionen las invitaciones (gratis, desde la carpeta del proyecto
+con tu sesión de `firebase login`):
 
 ```bash
 firebase deploy --only firestore:rules,firestore:indexes --project mi-voz-fc416
-# Requiere plan Blaze (Consola → ⚙ → Uso y facturación → Modificar plan):
+```
+
+Solo si más adelante activas Blaze (para avisos con la app cerrada):
+
+```bash
 cd functions && npm install && cd ..
 firebase deploy --only functions --project mi-voz-fc416
 ```
+
+### Invitaciones sin Cloud Functions: cómo se protegen
+
+| Paso | Quién | Qué comprueban las reglas |
+|---|---|---|
+| Crear código | Quien administra la clase o familia, con correo verificado | Es dueño del grupo; código de 8 caracteres válido; vigencia 48 h o 7 días; 1, 5 o 30 usos; empieza en 0 usos |
+| Consultar | Cualquier cuenta con correo verificado | Solo por código exacto; listar todas está prohibido |
+| Canjear | Adulto con correo verificado | En un solo lote: +1 uso exacto, sin vencer, sin revocar, sin pasar del límite, y una única solicitud pendiente (`uid_grupo_niño`). Para una clase, solo un adulto de la familia del niño |
+| Aprobar | Solo quien administra el grupo | La solicitud pasa de pendiente a aprobada en el mismo lote en que se agrega a la persona (familia) o la docente se agrega al perfil (clase) |
+
+Diferencias con la versión con funciones: **toda incorporación requiere
+aprobación** y **no hay bloqueo tras 5 códigos incorrectos** (las reglas no
+pueden contar intentos; hay ≈ 8,5 × 10¹¹ códigos posibles y se exige correo
+verificado). Al aprobar una familia con muchos niños hay un límite técnico de
+lecturas en las reglas (unos 9 perfiles por familia).
 
 La primera vez, el despliegue de funciones habilita solo las API que
 necesita (Cloud Functions, Cloud Build, Artifact Registry, Eventarc). Si
@@ -153,7 +173,7 @@ llama en esa región. Si las despliegas en otra, cambia la región en
 ```bash
 cd functions && npm install && cd ..
 cd firebase/tests && npm install && cd ../..
-firebase emulators:exec --project demo-mivoz --only auth,firestore,functions \
+firebase emulators:exec --project demo-mivoz --only auth,firestore \
   "node --test --test-concurrency=1 firebase/tests/flows.test.mjs"
 ```
 Requiere Java 11+ (en este equipo: Temurin 21) y Node 22.

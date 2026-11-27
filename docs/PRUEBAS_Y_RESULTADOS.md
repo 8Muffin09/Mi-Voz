@@ -12,7 +12,7 @@ Tres niveles, que **no** se sustituyen entre sí:
 | C. Dos teléfonos con un proyecto Firebase real | Todo el recorrido de extremo a extremo | `docs/DEMO_DOS_TELEFONOS.md` |
 
 Resultados de esta entrega: **A: 211 pruebas aprobadas** (3 omitidas a
-propósito: generan capturas solo a pedido). **B: 18 de 18 aprobadas** (14 recorridos + 4 del aviso al niño)
+propósito: generan capturas solo a pedido). **B: 20 de 20 aprobadas** con solo Auth y Firestore emulados, sin Cloud Functions (16 recorridos + 4 del aviso al niño)
 (salida en `docs/evidencias/emuladores.txt`). **C: pendiente** (no hay
 proyecto Firebase ni dos teléfonos disponibles en este entorno).
 
@@ -21,7 +21,7 @@ Ejecutar B:
 ```bash
 cd functions && npm install && cd ..
 cd firebase/tests && npm install && cd ../..
-firebase emulators:exec --project demo-mivoz --only auth,firestore,functions \
+firebase emulators:exec --project demo-mivoz --only auth,firestore \
   "node --test --test-concurrency=1 firebase/tests/flows.test.mjs"
 ```
 

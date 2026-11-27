@@ -17,8 +17,8 @@
  *   vio su mensaje, va en camino o lo resolvió (ver child_status.js).
  * - importLocalHistory: transfiere el historial de un dispositivo al perfil
  *   en la nube (solo el administrador; ver migration.js).
- * - createInvitation, previewInvitation, redeemInvitation, revokeInvitation,
- *   reviewJoinRequest: invitaciones a familias y clases (ver invitations.js).
+ * Las invitaciones a familias y clases NO usan funciones: son transacciones
+ * de la app validadas por firebase/firestore.rules (funcionan sin Blaze).
  *
  * El cliente móvil nunca tiene credenciales privadas: solo guarda su token.
  */
@@ -34,7 +34,6 @@ initializeApp();
 setGlobalOptions({ region: 'us-central1', maxInstances: 10 });
 
 // Invitaciones a familias y clases, validadas en el servidor.
-Object.assign(exports, require('./invitations'));
 // Limpieza al eliminar una cuenta.
 Object.assign(exports, require('./account'));
 Object.assign(exports, require('./migration'));

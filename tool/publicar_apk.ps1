@@ -1,4 +1,4 @@
-# Prepara los archivos de una versión de Mi Voz para descargar.
+﻿# Prepara los archivos de una versión de Mi Voz para descargar.
 #
 #   powershell -ExecutionPolicy Bypass -File tool\publicar_apk.ps1
 #

@@ -43,7 +43,8 @@ sin una acción externa. No se indican responsables, fechas ni porcentajes.
 | Actividad | Bloqueo | Acción necesaria |
 |---|---|---|
 | Vincular dos teléfonos | No hay proyecto Firebase (`firebase_options.dart` es un marcador) | Crear el proyecto y ejecutar `flutterfire configure` |
-| Códigos de invitación y push en la nube | Cloud Functions requieren el plan Blaze | Decidir y activar Blaze, luego `firebase deploy --only functions` |
+| Códigos de invitación | Ya no dependen de Blaze; falta desplegar las reglas | `firebase deploy --only firestore:rules,firestore:indexes --project mi-voz-fc416` |
+| Avisos con la app cerrada (push) | Requieren Cloud Functions (plan Blaze) | Opcional: activar Blaze y `firebase deploy --only functions` |
 | iOS | Falta Mac con Xcode y clave APNs | — |
 | Windows con nube en producción | Firebase indica que en Windows es solo para desarrollo | Decidir: API REST (propuesta en `docs/PLATAFORMAS.md`) o Windows solo local |
 

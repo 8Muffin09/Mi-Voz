@@ -49,7 +49,11 @@ Future<void> createAndShareInvitation(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
-    builder: (_) => _CreateInvitationSheet(type: type),
+    // En la nube (sin Cloud Functions) cada incorporación se aprueba.
+    builder: (_) => _CreateInvitationSheet(
+      type: type,
+      approvalOptional: !ref.read(isFirebaseModeProvider),
+    ),
   );
   if (options == null || !context.mounted) return;
   try {
@@ -70,9 +74,13 @@ Future<void> createAndShareInvitation(
 }
 
 class _CreateInvitationSheet extends StatefulWidget {
-  const _CreateInvitationSheet({required this.type});
+  const _CreateInvitationSheet({
+    required this.type,
+    this.approvalOptional = true,
+  });
 
   final InviteTargetType type;
+  final bool approvalOptional;
 
   @override
   State<_CreateInvitationSheet> createState() => _CreateInvitationSheetState();
@@ -154,16 +162,27 @@ class _CreateInvitationSheetState extends State<_CreateInvitationSheet> {
                 ),
             ],
           ),
-          SwitchListTile(
-            key: const Key('invite-approval'),
-            contentPadding: EdgeInsets.zero,
-            value: _approval,
-            onChanged: (v) => setState(() => _approval = v),
-            title: const Text('Aprobar cada solicitud'),
-            subtitle: const Text(
-              'Recomendado: nadie se incorpora hasta que tú lo apruebes.',
+          if (!widget.approvalOptional)
+            const ListTile(
+              key: Key('invite-approval-required'),
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.verified_user_outlined),
+              title: Text('Aprobarás cada solicitud'),
+              subtitle: Text(
+                'Nadie se incorpora hasta que tú lo apruebes desde tu panel.',
+              ),
+            )
+          else
+            SwitchListTile(
+              key: const Key('invite-approval'),
+              contentPadding: EdgeInsets.zero,
+              value: _approval,
+              onChanged: (v) => setState(() => _approval = v),
+              title: const Text('Aprobar cada solicitud'),
+              subtitle: const Text(
+                'Recomendado: nadie se incorpora hasta que tú lo apruebes.',
+              ),
             ),
-          ),
           const SizedBox(height: 8),
           FilledButton(
             key: const Key('invite-create'),

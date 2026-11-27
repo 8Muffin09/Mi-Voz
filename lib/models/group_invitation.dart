@@ -122,7 +122,13 @@ class GroupInvitation {
     createdByUid: readString(map['createdBy']) ?? '',
     createdByName: readString(map['createdByName']) ?? '',
     createdAt: parseDate(map['createdAt']) ?? DateTime.now(),
-    expiresAt: parseDate(map['expiresAt']) ?? DateTime.now(),
+    // Sin Cloud Functions se guarda la vigencia en horas (las reglas la
+    // comparan con la hora del servidor de `createdAt`).
+    expiresAt:
+        parseDate(map['expiresAt']) ??
+        (parseDate(map['createdAt']) ?? DateTime.now()).add(
+          Duration(hours: readInt(map['validityHours'], 48)),
+        ),
     maxUses: readInt(map['maxUses'], 1),
     uses: readInt(map['uses'], 0),
     revoked: readBool(map['revoked'], false),

@@ -2,7 +2,6 @@ import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -176,10 +175,11 @@ final classesRepositoryProvider = Provider<ClassesRepository>((ref) {
 
 final invitationsRepositoryProvider = Provider<InvitationsRepository>((ref) {
   if (ref.watch(isFirebaseModeProvider)) {
+    // Sin Cloud Functions: transacciones del cliente validadas por las
+    // reglas de Firestore (plan gratuito Spark).
     return FirebaseInvitationsRepository(
       _mivozFirestore,
-      // Misma región que `setGlobalOptions` en functions/index.js.
-      FirebaseFunctions.instanceFor(region: 'us-central1'),
+      auth: FirebaseAuth.instance,
       uid: ref.watch(sessionUidProvider),
     );
   }
